@@ -1,0 +1,533 @@
+{% extends "base.html" %}
+{% from "_ajuda.html" import info with context %}
+{% block title %}Registros RAAS — RAAS-CAPS{% endblock %}
+{% block page_title %}Registros RAAS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>📝 Registros RAAS</h1>
+        <p>Atendimentos registrados por competência</p>
+    </div>
+    <div class="month-selector">
+        <label>Competência: {{ info("Mês de referência do RAAS. A lista mostra só esse mês e todo atendimento lançado precisa ter data dentro dele.", "Competência") }}</label>
+        <input type="month" id="monthPicker" value="{{ sel_month }}" onchange="changeMonth()">
+        {% if user.role in ['admin', 'operador'] %}
+        <button class="btn btn-primary" onclick="openLote()" title="Lançar atendimentos, um ou vários, soltos ou dentro de um grupo">⚡ Digitação RAAS</button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span>Atendimentos de {{ sel_month }}</span>
+        <span class="badge badge-blue">{{ registros | length }} registro(s) · {{ groups | length }} paciente(s)</span>
+    </div>
+    {% if groups %}
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);position:relative;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        {#- A lupa é um ícone fixo dentro do campo, não parte do placeholder: assim o
+            cursor começa depois dela e não antes. -#}
+        <span class="reg-busca">
+            <span class="reg-busca-lupa" aria-hidden="true">🔎</span>
+            <input type="text" id="registroSearch" placeholder="Buscar paciente por nome ou prontuário..." autocomplete="off"
+                   oninput="filterRegistros()">
+        </span>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <label for="registroDateSearch" style="font-size:13px;color:var(--muted);white-space:nowrap;">📅 Atendidos em:</label>
+            <input type="date" id="registroDateSearch" onchange="filterRegistros()" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;outline:none;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="clearRegistroDateSearch()" title="Limpar data">✕</button>
+        </div>
+    </div>
+    <div id="registroNoMatch" style="display:none;text-align:center;padding:40px;color:var(--muted);">
+        <div style="font-size:32px;margin-bottom:10px;">🔎</div>
+        <div>Nenhum paciente encontrado para essa busca</div>
+    </div>
+    {% endif %}
+
+    {% if groups %}
+    {% for g in groups %}
+    <div class="registro-group" data-patient-id="{{ g.patient.id if g.patient else '' }}" data-patient-name="{{ (g.patient.name if g.patient else 'Desconhecido') | lower }}" data-patient-prontuario="{{ (g.patient.prontuario if g.patient else '') | lower }}" style="border-bottom:1px solid var(--border);">
+        <div class="registro-group-header" onclick="toggleGrupo(this)" style="padding:4px 16px;display:flex;align-items:center;gap:6px;background:var(--secondary-light);cursor:pointer;user-select:none;">
+            <span class="grupo-chevron" style="font-size:10px;color:var(--muted);width:10px;">▸</span>
+            <div style="width:19px;height:19px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0;">
+                {{ g.patient.name[0] | upper if g.patient else '?' }}
+            </div>
+            <strong style="font-size:12px;">{{ g.patient.name if g.patient else 'Desconhecido' }}{% if g.patient and g.patient.prontuario %} <span style="color:var(--muted);font-weight:600;">- Pront: {{ g.patient.prontuario }}</span>{% endif %}</strong>
+            <span class="badge badge-blue" style="font-size:10px;padding:1px 6px;">{{ g.records | length }} atend.</span>
+        </div>
+        <div class="table-wrapper" style="display:none;">
+            <table class="data-table data-table-compact">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Procedimento</th>
+                        <th>Profissional</th>
+                        <th>Tipo</th>
+                        <th>Qtd</th>
+                        <th>Local</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#- A cor de fundo de cada linha vem pronta do servidor
+                        (cores_das_linhas, em registro_frontend_router.py). -#}
+                    {% for r in g.records %}
+                    <tr data-date="{{ r.service_date }}" data-registro-id="{{ r.id }}"{% if r.cor_linha %} class="{{ r.cor_linha }}"{% endif %}>
+                        <td>{{ (r.service_date[8:10] ~ '/' ~ r.service_date[5:7] ~ '/' ~ r.service_date[:4]) if r.service_date else '—' }}</td>
+                        <td>{{ r.procedure_name[:40] }}{% if r.grupo_label %} <span class="badge badge-green" title="{{ r.grupo_titulo }}">{{ r.grupo_label }}</span>{% endif %}{% if r.evento_label %} <span class="badge badge-evento" title="{{ r.evento_titulo }}">{{ r.evento_label }}</span>{% endif %}</td>
+                        <td>{{ r.professional_name }}</td>
+                        <td><span class="badge badge-purple">{{ r.service_type_label }}</span></td>
+                        <td style="text-align:center;">{{ r.quantity or 1 }}</td>
+                        <td><span class="badge badge-{{ 'yellow' if r.local_realizacao == 'T' else 'blue' }}">{{ 'Território' if r.local_realizacao == 'T' else 'CAPS' }}</span></td>
+                        <td>
+                            {% if user.role in ['admin', 'operador'] %}
+                            <button class="btn btn-ghost btn-sm" onclick="openModal('{{ r.id }}')" title="Editar">✏️</button>
+                            {% endif %}
+                            {% if user.role == 'admin' %}
+                            <button class="btn btn-ghost btn-sm" onclick="deleteReg('{{ r.id }}')">🗑</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="text-align:center;padding:60px;color:var(--muted);">
+        <div style="font-size:40px;margin-bottom:12px;">📋</div>
+        <div style="font-weight:500;">Nenhum atendimento nesta competência</div>
+        <div style="font-size:13px;margin-top:4px;">Clique em "⚡ Digitação RAAS" para começar</div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="modal-overlay" id="regModal" style="display:none;">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h2 id="modalTitle">Editar Registro</h2>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <form id="regForm" onsubmit="saveReg(event)">
+            <input type="hidden" name="id" id="form-id">
+            <input type="hidden" name="service_month" id="form-month" value="{{ sel_month }}">
+            <div class="form-row">
+                <div class="form-group"><label>Data do Atendimento * {{ info("Precisa estar dentro da competência escolhida e não pode ser anterior à admissão do paciente.") }}</label><input type="date" name="service_date" required></div>
+                <div class="form-group"><label>Local</label>
+                    <select name="local_realizacao"><option value="C">CAPS</option><option value="T">Território</option></select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="position:relative;">
+                    <label>Paciente *</label>
+                    <input type="text" id="patientSearch" class="autocomplete-input" placeholder="Buscar paciente por nome, CNS ou prontuário..." autocomplete="off" oninput="searchPatient(this.value)" onfocus="searchPatient(this.value)">
+                    <button type="button" class="input-clear-btn" tabindex="-1" onclick="clearPatient()" title="Limpar seleção">✕</button>
+                    <input type="hidden" name="patient_id" id="form-patient-id">
+                    <div id="patientResults" class="autocomplete-results" style="display:none;"></div>
+                    <div class="reg-field-error"></div>
+                </div>
+                <div class="form-group" style="position:relative;">
+                    <label>Profissional *</label>
+                    <input type="text" id="profSearch" class="autocomplete-input" placeholder="Buscar profissional por nome..." autocomplete="off" oninput="searchProf(this.value)" onfocus="searchProf(this.value)">
+                    <button type="button" class="input-clear-btn" tabindex="-1" onclick="clearProf()" title="Limpar seleção">✕</button>
+                    <input type="hidden" name="professional_id" id="form-professional-id">
+                    <div id="profResults" class="autocomplete-results" style="display:none;"></div>
+                    <div class="reg-field-error"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Procedimentos * {{ info("Cada procedimento vira um atendimento. Informe a quantidade ao lado. O mesmo paciente, data, profissional e procedimento não podem ser lançados duas vezes.") }} <span style="font-weight:400;color:var(--muted);font-size:12px;">(até 5 simultâneos)</span></label>
+                <div id="procRows"></div>
+                <button type="button" class="btn btn-outline btn-sm" id="addProcBtn" tabindex="-1" onclick="adicionarProcedimento()">＋ Adicionar procedimento</button>
+            </div>
+            <div class="form-group" id="authorizationRow" style="display:none;">
+                <label>Nº da Autorização</label>
+                <input type="text" name="authorization" id="authorizationInput" placeholder="Informe o número da autorização" maxlength="20" disabled>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>CBO</label><input type="text" name="cbo_code" id="cboInput" placeholder="Auto"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Serviço (SRV)</label>
+                    <select name="srv">
+                        {% for o in srv_opts %}<option value="{{ o.value }}">{{ o.label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group"><label>Classificação (CLS)</label>
+                    <select name="cls">
+                        {% for o in cls_opts %}<option value="{{ o.value }}">{{ o.label }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Equipe</label>
+                <input type="text" value="{{ default_team_code }}-{{ default_team_name }}" disabled>
+            </div>
+            <div class="modal-footer">
+                <label style="margin-right:auto;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;" title="Após salvar, o próximo registro mantém data, profissional e procedimentos; só muda o paciente">
+                    <input type="checkbox" id="keepData" tabindex="-1"> Manter dados (só trocar paciente)
+                </label>
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+        <div class="reg-notice" id="regNotice" hidden>
+            <div class="reg-notice-box" id="regNoticeBox" onclick="hideRegNotice()" title="Clique para fechar"></div>
+        </div>
+    </div>
+</div>
+
+{% if user.role in ['admin', 'operador'] %}
+<div class="modal-overlay" id="loteModal" style="display:none;">
+    <div class="modal lote-modal">
+        <div class="lote-corpo">
+        <div class="lote-esq">
+        {#- O título fica só em cima da coluna da esquerda e o ✕ vai para a
+            barra do quadro de lançamentos: assim o quadro sobe até a margem. -#}
+        <div class="modal-header lote-cab">
+            <h2 id="loteTitulo">Digitação RAAS</h2>
+        </div>
+        <div class="lote-main">
+        <div class="lote-grupo-barra" id="loteGrupoBarra">
+            <span class="lote-grupo-txt" id="loteGrupoTxt">Lançamento avulso — nenhum grupo selecionado</span>
+            <button type="button" class="btn btn-outline btn-sm" id="loteGrupoEditar" onclick="editarGrupoLote()" style="display:none;">✏️ Editar grupo</button>
+            <button type="button" class="btn btn-outline btn-sm" id="loteGrupoExcluir" onclick="excluirGrupoLote()" style="display:none;"
+                    title="Excluir este grupo (só grupos sem atendimentos)">🗑 Excluir grupo</button>
+            <button type="button" class="btn btn-outline btn-sm" id="loteGrupoSair" onclick="sairDoGrupoLote()" style="display:none;">Sair do grupo</button>
+            <select id="loteGrupoEscolher" class="lote-grupo-escolher" onchange="escolherGrupoLote(this)"
+                    title="Lançar num grupo já criado nesta competência (os pacientes dele já entram na grade)">
+                <option value="">Grupo já criado…</option>
+            </select>
+            <button type="button" class="btn btn-primary btn-sm" id="loteGrupoNovo" onclick="lancarGrupoLote()">👥 Lançar grupo</button>
+        </div>
+        <div class="lote-header">
+            <div class="form-group" style="position:relative;">
+                <label>Profissionais * {{ info("Quem realizou os atendimentos. Cada profissional recebe um registro para cada paciente e procedimento, com o CBO dele.") }} <span class="lote-dica">(até {{ lote_max_profs }})</span></label>
+                <input type="text" id="loteProf" class="ac" data-kind="prof" placeholder="Buscar profissional..." autocomplete="off" spellcheck="false">
+                <div id="loteProfs" class="lote-chips"></div>
+            </div>
+            <div class="form-group" style="position:relative;">
+                <label>Procedimentos * {{ info("Até 5 procedimentos. Cada um é lançado para todos os pacientes do lote. O atendimento em grupo (03.01.08.021-6) só entra pelo 👥 Lançar grupo, e já vem escolhido.") }} <span class="lote-dica">(até 5)</span></label>
+                <input type="text" id="loteProc" class="ac" data-kind="proc" placeholder="Buscar procedimento..." autocomplete="off" spellcheck="false">
+                <div id="loteProcs" class="lote-chips"></div>
+            </div>
+            <div class="form-group"><label>Local {{ info("CAPS: atendimento dentro da unidade. Território: atendimento fora dela. Vale para todos os pacientes do lote.") }}</label>
+                <select id="loteLocal"><option value="C">CAPS</option><option value="T">Território</option></select>
+            </div>
+            <div class="form-group"><label>Serviço (SRV) {{ info("Código do serviço/classificação do CNES da unidade. O padrão costuma servir; só altere se a unidade tiver outro cadastro.") }}</label>
+                <select id="loteSrv">{% for o in srv_opts %}<option value="{{ o.value }}">{{ o.label }}</option>{% endfor %}</select>
+            </div>
+            <div class="form-group"><label>Classificação (CLS) {{ info("Classificação do serviço no CNES, usada junto com o SRV.") }}</label>
+                <select id="loteCls">{% for o in cls_opts %}<option value="{{ o.value }}">{{ o.label }}</option>{% endfor %}</select>
+            </div>
+            <div class="form-group lote-equipe"><label>Equipe {{ info("Equipe da unidade, a mesma para todos os atendimentos.") }}</label>
+                <input type="text" value="{{ default_team_code }}-{{ default_team_name }}" disabled title="{{ default_team_code }}-{{ default_team_name }}">
+            </div>
+            <div class="form-group" id="loteAuthRow" style="display:none;">
+                <label>Nº da Autorização</label>
+                <input type="text" id="loteAuth" maxlength="20" placeholder="Número da autorização">
+            </div>
+        </div>
+        <div class="lote-grid-wrap">
+            <table class="lote-table">
+                <thead>
+                    <tr><th>#</th><th>Data</th><th>Paciente</th><th>Qtd</th><th></th></tr>
+                </thead>
+                <tbody id="loteBody"></tbody>
+            </table>
+        </div>
+        <div class="lote-dicas">
+            <strong>Teclado:</strong>
+            <kbd>Enter</kbd> avança e escolhe a 1ª sugestão ·
+            <kbd>↑</kbd><kbd>↓</kbd> sugestões / muda de linha ·
+            <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva ·
+            <kbd>Ctrl</kbd>+<kbd>Del</kbd> remove a linha ·
+            data como <kbd>5</kbd>, <kbd>0510</kbd> ou <kbd>05/10</kbd> ·
+            cole uma lista de pacientes (um por linha, até 30) na coluna Paciente ·
+            dentro de um grupo a data vem do próprio grupo
+        </div>
+        </div>
+        {#- O rodapé fica só embaixo da coluna da esquerda: assim o quadro de
+            lançamentos, à direita, desce até a borda da janela. -#}
+        <div class="modal-footer lote-footer">
+            <span id="loteSummary" class="lote-resumo"></span>
+            <button type="button" class="btn btn-outline" onclick="addLoteRow()">＋ Linha</button>
+            <button type="button" class="btn btn-outline" id="loteLimparBtn" onclick="limparLote()"
+                    title="Apaga pacientes, profissionais e procedimentos digitados, sem fechar a janela">🧹 Limpar tela</button>
+            <button type="button" class="btn btn-outline" onclick="closeLote()">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="loteSaveBtn" onclick="saveLote()">Salvar</button>
+        </div>
+        </div>
+        <aside class="lote-aside">
+            <div class="lote-aside-titulo">
+                <div class="lote-abas" role="tablist">
+                    <button type="button" role="tab" id="loteAbaGrupos" class="ativo" onclick="mostrarAbaLote('grupos')">👥 Grupos <span id="loteAbaGruposN"></span></button>
+                    <button type="button" role="tab" id="loteAbaAvulsos" onclick="mostrarAbaLote('avulsos')">📝 Avulsos <span id="loteAbaAvulsosN"></span></button>
+                </div>
+                <button type="button" class="lote-aside-btn" id="loteGruposModo" onclick="alternarModoGruposLote()"
+                        title="Mostrar ou ocultar os atendimentos">Ocultar atendimentos</button>
+                <button type="button" class="lote-aside-fechar" onclick="closeLote()" title="Fechar (Esc)" aria-label="Fechar">✕</button>
+            </div>
+            <div id="loteGrupos" class="lote-lancados"></div>
+            <div id="loteAvulsos" class="lote-lancados" style="display:none;"></div>
+        </aside>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay lote-sessao-overlay" id="loteGrupoModal" style="display:none;">
+    <div class="modal lote-grupo-modal" role="dialog" aria-labelledby="loteGrupoModalTitulo">
+        <div class="modal-header">
+            <h2 id="loteGrupoModalTitulo">👥 Lançar grupo</h2>
+            <button class="modal-close" onclick="cancelarGrupoLote()">✕</button>
+        </div>
+        <p class="lote-sessao-texto">O número do grupo é dado pela ordem de data e horário dentro da competência:
+            lançado fora de ordem, ele entra na posição certa sozinho.</p>
+        <div class="form-group">
+            <label>Descrição * <span class="lote-dica">(até 30 caracteres)</span></label>
+            <input type="text" id="loteGrupoDesc" maxlength="30" placeholder="Ex.: Música" autocomplete="off">
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>Data *</label><input type="date" id="loteGrupoData"></div>
+            <div class="form-group"><label>Horário *</label><input type="time" id="loteGrupoHora"></div>
+            <div class="form-group"><label>Qtd. de pessoas *</label>
+                <input type="number" id="loteGrupoPessoas" min="1" max="30" placeholder="Ex.: 8"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="cancelarGrupoLote()">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="loteGrupoSalvar" onclick="confirmarGrupoLote()">Salvar grupo</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay lote-sessao-overlay" id="loteExcessoModal" style="display:none;">
+    <div class="modal lote-sessao-modal lote-excesso-modal" role="alertdialog" aria-labelledby="loteExcessoTitulo">
+        <div class="lote-excesso-icone">⚠️</div>
+        <h2 id="loteExcessoTitulo"></h2>
+        <p id="loteExcessoTxt" class="lote-excesso-pergunta"></p>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="responderExcessoLote(false)">Não</button>
+            <button type="button" class="btn btn-primary" onclick="responderExcessoLote(true)">Sim</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay lote-sessao-overlay" id="loteAvisoModal" style="display:none;">
+    <div class="modal lote-sessao-modal lote-excesso-modal" role="alertdialog" aria-labelledby="loteAvisoTitulo">
+        <div class="lote-excesso-icone">🚫</div>
+        <h2 id="loteAvisoTitulo">Lançamento repetido</h2>
+        <p id="loteAvisoTxt" class="lote-aviso-texto"></p>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="fecharAvisoLote()">OK</button>
+        </div>
+    </div>
+</div>
+<div id="loteDrop" class="autocomplete-results lote-drop" style="display:none;"></div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PACIENTES_DATA = [
+    {% for p in pacientes.values() %}
+    { id: "{{ p.id }}", name: {{ p.name | tojson }}, prontuario: {{ p.prontuario | tojson }}, cns: {{ p.cns | tojson }}, motherName: {{ p.mother_name | tojson }}, birthDate: {{ p.birth_date | tojson }} },
+    {% endfor %}
+];
+
+const PROCEDIMENTOS_DATA = [
+    {% for p in active_procedimentos %}
+    { id: "{{ p.id }}", label: {{ p.label | tojson }}, code: {{ p.code | tojson }} },
+    {% endfor %}
+];
+
+const LOTE_MAX_PROFS = {{ lote_max_profs }};
+
+const PROFISSIONAIS_DATA = [
+    {% for p in active_profissionais %}
+    { id: "{{ p.id }}", name: {{ p.name | tojson }}, cbo: {{ p.cbo | tojson }} },
+    {% endfor %}
+];
+</script>
+<script src="/static/js/registros.js"></script>
+<script src="/static/js/registros_lote.js"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Quase a tela toda: a digitação à esquerda e os lançamentos à direita. */
+.lote-modal { max-width: 98vw; width: 98vw; height: 95vh; max-height: 95vh; display: flex; flex-direction: column; overflow: hidden; }
+.lote-corpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 42%); gap: 16px; align-items: stretch; }
+.lote-esq { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.lote-main { flex: 1; min-height: 0; overflow: auto; padding-right: 4px; }
+.lote-esq > .lote-footer { flex-shrink: 0; margin-top: 12px; flex-wrap: wrap; }
+.lote-aside { display: flex; flex-direction: column; min-height: 0; }
+.lote-aside .lote-lancados { flex: 1; max-height: none; }
+.lote-abas { display: flex; gap: 4px; }
+.lote-abas button { cursor: pointer; border: 1px solid rgba(255,255,255,.45); background: transparent; color: rgba(255,255,255,.85); font: inherit; font-size: 13px; font-weight: 700; border-radius: 8px; padding: 3px 10px; }
+.lote-abas button.ativo { background: #fff; color: #1e3a8a; }
+.lote-abas button span { font-weight: 600; opacity: .8; }
+.lote-equipe input { width: 100%; text-overflow: ellipsis; }
+.avs-dia { margin-bottom: 10px; border: 1px solid #cbd5e1; border-left: 4px solid #059669; border-radius: 8px; background: #fff; overflow: hidden; }
+.avs-dia .grp-cab { background: #ecfdf5; }
+.avs-dia .grp-titulo { color: #065f46; }
+.grp-pac.novo { background: #fef9c3; }
+.lote-main { min-width: 0; }
+.lote-modal { transition: max-width .25s ease, width .25s ease; }
+.lote-corpo { transition: grid-template-columns .25s ease; }
+/* Com um lote salvo a janela cresce e o quadro fica bem mais largo. */
+.lote-aside { border: 2px solid #1e3a8a; border-radius: 12px; background: #fff; overflow: hidden; box-shadow: 0 6px 18px rgba(30,58,138,.12); }
+.lote-aside-titulo { padding: 10px 14px; font-weight: 700; font-size: 14px; color: #fff; background: linear-gradient(90deg, #1e3a8a, #4f46e5); }
+.lote-aside-titulo { display: flex; align-items: center; gap: 8px; }
+.lote-aside-btn { margin-left: auto; flex-shrink: 0; cursor: pointer; border: 1px solid rgba(255,255,255,.5); background: rgba(255,255,255,.15); color: #fff; font: inherit; font-size: 11.5px; font-weight: 600; border-radius: 10px; padding: 2px 9px; }
+.lote-aside-btn:hover { background: rgba(255,255,255,.3); }
+.lote-aside-fechar { flex-shrink: 0; cursor: pointer; border: none; background: none; color: #fff; font-size: 18px; line-height: 1; padding: 2px 4px 2px 8px; opacity: .85; }
+.lote-aside-fechar:hover { opacity: 1; }
+.lote-esq > .lote-cab { flex-shrink: 0; margin-bottom: 14px; }
+.lote-lancados { overflow: auto; padding: 10px; background: #f8fafc; }
+.lote-lanc-vazio { padding: 18px 14px; color: var(--muted); font-size: 13px; text-align: center; }
+
+/* ── Caixa dos grupos (disposição do modelo "Registros RAAS – Grupos") ── */
+.grp-card { border: 1px solid #cbd5e1; border-left: 4px solid #94a3b8; border-radius: 8px; background: #fff; margin-bottom: 10px; overflow: hidden; }
+.grp-card.ativo { border-color: #4f46e5; border-left-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,.15); }
+.grp-cab { display: flex; align-items: center; gap: 6px; padding: 6px 9px; background: #e9eef5; cursor: pointer; user-select: none; }
+.grp-card.ativo .grp-cab { background: #e0e7ff; }
+/* Seta desenhada em CSS: para baixo o grupo está aberto, para a direita fechado. */
+.grp-seta { flex-shrink: 0; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6.5px solid #1e3a8a; transition: transform .15s ease; }
+.grp-card.retraido .grp-seta { transform: rotate(-90deg); }
+.grp-titulo { font-size: 12.5px; font-weight: 700; color: #1e3a8a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grp-vagas { flex-shrink: 0; font-size: 11px; font-weight: 700; color: #065f46; background: #d1fae5; border-radius: 10px; padding: 1px 7px; }
+.grp-vagas.cheio { color: #7c2d12; background: #fed7aa; }
+.grp-acoes { margin-left: auto; display: flex; gap: 3px; flex-shrink: 0; }
+.grp-acoes button { border: none; background: none; cursor: pointer; font-size: 12px; padding: 1px 5px; border-radius: 6px; color: #334155; }
+.grp-acoes button:hover { background: rgba(15,23,42,.1); }
+.grp-acoes .grp-usar { font-weight: 700; color: #4f46e5; }
+.grp-corpo { padding: 4px 0 6px; }
+.grp-card.retraido .grp-corpo { display: none; }
+.grp-vazio { padding: 8px 12px; font-size: 12px; color: var(--muted); font-style: italic; }
+.grp-pac { padding: 3px 10px 3px 12px; }
+.grp-pac + .grp-pac { border-top: 1px dashed #e2e8f0; }
+.grp-pac-nome { font-size: 12.5px; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grp-pac-nome span { font-weight: 600; color: #64748b; }
+.grp-procs { list-style: none; margin: 1px 0 2px; padding: 0 0 0 14px; }
+.grp-procs li { display: grid; grid-template-columns: 12px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; font-size: 11.5px; line-height: 1.55; }
+.grp-check { color: #059669; font-weight: 700; }
+.grp-proc, .grp-prof { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grp-proc { color: #1f2937; text-transform: uppercase; }
+.grp-prof { color: #475569; text-transform: uppercase; }
+.grp-qtd { color: #047857; font-weight: 700; }
+/* Retraído: só os pacientes, sem os procedimentos. */
+.lote-lancados.so-pacientes .grp-procs { display: none; }
+.lote-lancados.so-pacientes .grp-pac { padding-top: 1px; padding-bottom: 1px; }
+
+/* ── Barra do grupo em que o lote está sendo lançado ── */
+.lote-grupo-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; padding: 7px 10px; border: 1px dashed var(--border); border-radius: 10px; background: #f8fafc; }
+.lote-grupo-escolher { max-width: 260px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: #fff; }
+.lote-grupo-barra.ativo { border-style: solid; border-color: #4f46e5; background: #eef2ff; }
+.lote-grupo-txt { font-size: 13px; font-weight: 600; color: var(--muted); margin-right: auto; }
+.lote-grupo-barra.ativo .lote-grupo-txt { color: #3730a3; }
+.lote-sessao-overlay { z-index: 1500; }
+.lote-grupo-modal { max-width: 520px; }
+.lote-sessao-modal { max-width: 420px; }
+.lote-sessao-texto { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.lote-excesso-modal { max-width: 400px; text-align: center; }
+.lote-excesso-modal h2 { font-size: 17px; margin-bottom: 6px; }
+.lote-excesso-icone { font-size: 34px; margin-bottom: 6px; }
+.lote-aviso-texto { font-size: 14px; color: var(--dark); line-height: 1.5; margin: 6px 0 14px; }
+.lote-excesso-pergunta { font-size: 16px; font-weight: 600; color: var(--primary); margin: 4px 0 14px; }
+.lote-excesso-modal .modal-footer { justify-content: center; }
+.lote-excesso-modal .modal-footer .btn { min-width: 96px; }
+@media (max-width: 1100px) { .lote-corpo { grid-template-columns: minmax(0, 1fr) 360px; } }
+@media (max-width: 900px) { .lote-modal { height: auto; max-height: 96vh; overflow: auto; } .lote-corpo { grid-template-columns: 1fr; } }
+.lote-header { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px 10px; align-items: end; }
+.lote-header > .form-group { grid-column: span 2; }
+.lote-header > .form-group:nth-child(1), .lote-header > .form-group:nth-child(2) { grid-column: span 3; }
+.lote-header > .lote-equipe { grid-column: span 6; }
+.lote-header select { min-width: 0; width: 100%; }
+.lote-header .form-group { margin-bottom: 4px; }
+.lote-dica { font-weight: 400; color: var(--muted); font-size: 12px; }
+.lote-grid-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; margin-top: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.lote-table { width: 100%; border-collapse: collapse; }
+.lote-table th { position: sticky; top: 0; background: var(--muted-bg); text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 6px 8px; z-index: 1; }
+.lote-table td { padding: 6px 6px; border-top: 1px solid var(--border); vertical-align: top; }
+.lote-table tbody tr:nth-child(even) td { background: #fbfcfe; }
+.lote-table tbody tr:focus-within td { background: var(--primary-light); }
+.lote-table td.l-n { padding-top: 14px; }
+.lote-table input { width: 100%; padding: 7px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 13px; background: #fff; }
+.lote-table input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px var(--primary-light); }
+.lote-table input.input-invalid { border-color: var(--danger); background: #fff7f7; }
+/* Dentro de um grupo a data vem do grupo e não se digita. */
+.lote-table input[readonly] { background: #f1f5f9; color: #475569; cursor: default; }
+.lote-table th:nth-child(1), .lote-table td.l-n { width: 34px; text-align: center; color: var(--muted); font-size: 12px; }
+.lote-table th:nth-child(2) { width: 110px; }
+.lote-table th:nth-child(4) { width: 80px; }
+.lote-table th:nth-child(5) { width: 40px; }
+.lote-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.lote-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--primary-light); color: var(--primary); border-radius: 12px; padding: 2px 4px 2px 10px; font-size: 12px; font-weight: 500; max-width: 100%; }
+.lote-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lote-chip button { background: none; border: none; cursor: pointer; color: inherit; font-size: 13px; padding: 0 4px; }
+.lote-table .l-qty { text-align: center; }
+select.input-invalid { border-color: var(--danger); background: #fff7f7; }
+.lote-table .l-msg { font-size: 12px; color: var(--danger); font-weight: 500; margin-top: 3px; }
+.lote-table .l-msg:empty { display: none; }
+.lote-table tr.lote-erro { background: #fff7f7; }
+.lote-dicas { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.9; }
+.lote-dicas kbd { background: var(--muted-bg); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11px; font-family: inherit; color: var(--dark); }
+.lote-footer { align-items: center; }
+.lote-resumo { margin-right: auto; font-size: 13px; color: var(--muted); }
+.lote-drop { position: fixed; z-index: 2000; right: auto; border-radius: 10px; box-shadow: 0 12px 32px rgba(15,23,42,.18); }
+.lote-drop .lote-drop-info { position: sticky; top: 0; z-index: 1; padding: 6px 12px; font-size: 11px; color: var(--muted); background: var(--muted-bg); border-bottom: 1px solid var(--border); }
+.lote-drop .autocomplete-item { padding: 7px 12px; display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 12px; }
+.lote-drop .autocomplete-item .item-name { font-size: 13.5px; }
+.lote-drop .autocomplete-item .item-sub { font-size: 11.5px; grid-column: 1 / -1; }
+.lote-drop .autocomplete-item.selected { background: var(--primary-light); box-shadow: inset 3px 0 0 var(--primary); }
+.lote-drop mark { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
+@media (max-width: 900px) { .lote-header { grid-template-columns: 1fr 1fr; } .lote-header > .form-group { grid-column: auto !important; } }
+
+.proc-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
+.proc-row .form-group { margin-bottom: 0; }
+.proc-row .proc-select-group { flex: 1 1 auto; min-width: 0; }
+.proc-row .proc-qty-group { flex: 0 0 72px; }
+.proc-row .proc-qty-group input { text-align: center; padding-left: 6px; padding-right: 6px; }
+/* As linhas de procedimento não têm label, então o 🗑 não pode ganhar o
+   deslocamento de 26px — é o que o fazia cair para fora do retângulo do campo.
+   Os 5px centram o botão (25px) no campo (36px); alinhar pelo topo mantém isso
+   estável quando a mensagem de erro aparece embaixo e estica o grupo. */
+.proc-row .proc-remove-btn { align-self: flex-start; margin-top: 5px; flex-shrink: 0; }
+.reg-field-error {
+    display: none;
+    margin-top: 4px;
+    color: var(--danger);
+    font-size: 12px;
+    font-weight: 500;
+}
+.reg-field-error.show { display: block; }
+.registro-group .data-table-compact { width: 120mm; max-width: 100%; }
+.registro-group .data-table-compact th,
+.registro-group .data-table-compact td { white-space: nowrap; }
+/* Abre encostada à direita (mantendo a centralização vertical do overlay),
+   para a relação de atendimentos continuar visível à esquerda. As margens
+   automáticas vencem o justify-content:center e o arraste continua livre,
+   pois arrastar troca para position:fixed com margin 0. */
+#regModal .modal { margin-left: auto; margin-right: min(7vw, 115px); }
+@media (max-width: 1100px) {
+    #regModal .modal { margin-left: auto; margin-right: auto; }
+}
+
+
+.data-table-compact th { padding: 4px 12px; font-size: 10px; }
+.registro-group thead tr { background: #dde3ea; }
+/* Com a janela aberta sobra espaço abaixo da lista, para que o paciente
+   escolhido sempre possa subir até o topo da tela. */
+body.reg-modal-aberto .main-content { padding-bottom: 100vh; }
+.registro-group tbody tr { background: #fff; }
+.registro-group tbody tr.reg-bloco-amarelo { background: #fff2cc; }
+.registro-group tbody tr.reg-bloco-amarelo:hover { background: #ffe8a8; }
+.registro-group tbody tr.reg-bloco-azul { background: #dbeafe; }
+.registro-group tbody tr.reg-bloco-azul:hover { background: #bfdbfe; }
+.registro-group tbody tr.reg-proc-rosa { background: #fbcfe8; }
+.registro-group tbody tr.reg-proc-rosa:hover { background: #f9a8d4; }
+.registro-group tbody tr.reg-proc-vermelho { background: #fecaca; }
+.registro-group tbody tr.reg-proc-vermelho:hover { background: #fca5a5; }
+.data-table-compact td { padding: 4px 12px; font-size: 12px; }
+.data-table-compact .badge { font-size: 10px; padding: 1px 6px; }
+.data-table-compact .btn-sm { padding: 2px 6px; font-size: 11px; }
+</style>
+{% endblock %}

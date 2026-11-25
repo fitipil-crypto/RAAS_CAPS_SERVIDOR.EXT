@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% from "_ajuda.html" import info with context %}
+{% block title %}Indicadores CAPS — RAAS-CAPS{% endblock %}
+{% block page_title %}Indicadores CAPS{% endblock %}
+
+{% macro hbars(items, color='var(--primary)') %}
+{% set mx = (items | map(attribute=1) | max) if items else 0 %}
+{% for label, value in items %}
+<div style="display:flex;align-items:center;gap:10px;margin:6px 0;font-size:13px;">
+    <div style="flex:0 0 42%;line-height:1.25;word-break:break-word;">{{ label }}</div>
+    <div style="flex:1;background:var(--muted-bg);border-radius:4px;height:16px;">
+        <div style="width:{{ (value / mx * 100) if mx else 0 }}%;min-width:{{ 3 if value else 0 }}px;height:100%;background:{{ color }};border-radius:4px;"></div>
+    </div>
+    <div style="flex:0 0 44px;text-align:right;font-weight:600;">{{ value }}</div>
+</div>
+{% else %}
+<div style="color:var(--muted);font-size:13px;">Sem dados no período.</div>
+{% endfor %}
+{% endmacro %}
+
+{% block content %}
+{% set ind = d.indicadores %}
+<div class="page-header">
+    <div>
+        <h1>🎯 Indicadores CAPS</h1>
+        <p>Produção, perfil dos usuários e indicadores de cuidado — {{ d.month[5:] }}/{{ d.month[:4] }}</p>
+    </div>
+    <form method="get" action="/indicadores" style="display:flex;gap:10px;align-items:center;">
+        <input type="month" name="month" value="{{ d.month }}" class="search-input" style="width:auto;padding:8px 12px;" onchange="this.form.submit()">
+        <a href="/relatorios-impressao?tipo=indicadores&mes={{ d.month }}" class="btn btn-outline btn-sm">🖨️ Imprimir / Exportar</a>
+    </form>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card stat-primary"><div class="stat-icon">🩺</div><div class="stat-body">
+        <div class="stat-value">{{ d.total_atendimentos }}</div><div class="stat-label">Atendimentos {{ info("Soma das quantidades lançadas no mês escolhido.") }}</div></div></div>
+    <div class="stat-card stat-secondary"><div class="stat-icon">👥</div><div class="stat-body">
+        <div class="stat-value">{{ d.usuarios_atendidos }}</div><div class="stat-label">Usuários atendidos {{ info("Pacientes diferentes com ao menos um atendimento no mês.") }}</div></div></div>
+    <div class="stat-card stat-accent"><div class="stat-icon">📊</div><div class="stat-body">
+        <div class="stat-value">{{ ind.media_por_usuario }}</div><div class="stat-label">Atendimentos por usuário {{ info("Atendimentos do mês divididos pelos usuários atendidos.") }}</div></div></div>
+    <div class="stat-card stat-warning"><div class="stat-icon">🏘️</div><div class="stat-body">
+        <div class="stat-value">{{ ind.pct_territorio }}%</div><div class="stat-label">Atividades no território {{ info("Percentual dos atendimentos do mês realizados fora da unidade (Local = Território).") }}</div></div></div>
+    <div class="stat-card stat-secondary"><div class="stat-icon">🆕</div><div class="stat-body">
+        <div class="stat-value">{{ d.novos_pacientes }}</div><div class="stat-label">Novos pacientes {{ info("Pacientes cadastrados no sistema durante o mês escolhido.") }}</div></div></div>
+    <div class="stat-card stat-primary"><div class="stat-icon">👤</div><div class="stat-body">
+        <div class="stat-value">{{ d.stats.total_pacientes }}</div><div class="stat-label">Total cadastrados {{ info("Todos os pacientes cadastrados, em qualquer mês.") }}</div></div></div>
+    <div class="stat-card stat-accent"><div class="stat-icon">👨‍⚕️</div><div class="stat-body">
+        <div class="stat-value">{{ d.stats.total_profissionais }}</div><div class="stat-label">Profissionais ativos {{ info("Profissionais com cadastro ativo.") }}</div></div></div>
+    <div class="stat-card stat-warning"><div class="stat-icon">📝</div><div class="stat-body">
+        <div class="stat-value">{{ d.stats.total_registros }}</div><div class="stat-label">Total de registros {{ info("Todos os atendimentos lançados, em qualquer mês. Procedimentos ativos: " ~ d.stats.total_procedimentos ~ ".") }}</div></div></div>
+</div>
+
+<div class="card" style="margin-top:24px;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">📅 Produção mensal (últimos 12 meses) {{ info("Atendimentos por mês, terminando no mês escolhido. A barra azul é o mês selecionado; passe o mouse para ver também os usuários atendidos.") }}</div>
+    {% set rows = d.producao_mensal %}
+    {% set mxa = (rows | map(attribute='atendimentos') | max) if rows else 0 %}
+    <div style="padding:24px;display:flex;align-items:flex-end;gap:10px;height:210px;">
+        {% for r in rows %}
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;"
+             title="{{ r.label }}: {{ r.atendimentos }} atendimentos, {{ r.pacientes_ativos }} usuários">
+            <div style="font-size:11px;font-weight:700;color:var(--primary);">{{ r.atendimentos }}</div>
+            <div style="width:100%;background:{{ 'var(--primary)' if r.month == d.month else 'var(--secondary)' }};border-radius:4px 4px 0 0;height:{{ ((r.atendimentos / mxa * 120) if mxa else 0)|round|int }}px;min-height:4px;"></div>
+            <div style="font-size:11px;color:var(--muted);">{{ r.label }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% macro variacao(v) -%}
+{%- if v is none or v == 0 -%}<span style="color:var(--muted);">—</span>
+{%- elif v > 0 -%}<span style="color:var(--secondary);font-weight:600;">▲ {{ v }}%</span>
+{%- else -%}<span style="color:var(--danger);font-weight:600;">▼ {{ v | abs }}%</span>{%- endif -%}
+{%- endmacro %}
+<div class="card" style="margin-top:24px;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">📊 Comparativo mês a mês (12 meses) {{ info("Compara cada mês com o anterior. A variação é o percentual de aumento (▲) ou queda (▼). Novos pacientes são os cadastrados no mês.") }}</div>
+    <div class="table-wrapper">
+        <table class="data-table data-table-compacta">
+            <thead><tr>
+                <th>Mês</th><th style="text-align:right;">Atendimentos</th><th style="text-align:right;">Var.</th>
+                <th style="text-align:right;">Usuários</th><th style="text-align:right;">Var.</th>
+                <th style="text-align:right;">Novos pac.</th><th style="text-align:right;">Proced.</th>
+                <th style="text-align:right;">Profis.</th><th style="text-align:right;">Média/usuário</th>
+            </tr></thead>
+            <tbody>
+                {% for r in d.producao_mensal | reverse %}
+                <tr{% if r.month == d.month %} style="background:var(--primary-light);"{% endif %}>
+                    <td style="font-weight:600;white-space:nowrap;">{{ r.label }}</td>
+                    <td style="text-align:right;font-weight:600;">{{ r.atendimentos }}</td>
+                    <td style="text-align:right;">{{ variacao(r.var_atendimentos) }}</td>
+                    <td style="text-align:right;">{{ r.pacientes_ativos }}</td>
+                    <td style="text-align:right;">{{ variacao(r.var_pacientes) }}</td>
+                    <td style="text-align:right;">{{ r.novos_pacientes }}</td>
+                    <td style="text-align:right;">{{ r.procedimentos_distintos }}</td>
+                    <td style="text-align:right;">{{ r.profissionais_ativos }}</td>
+                    <td style="text-align:right;">{{ r.media_por_paciente }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;margin-top:24px;">
+    <div class="card"><div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">👥 Perfil: gênero {{ info("Gênero dos usuários atendidos no mês, conforme o cadastro do paciente.") }}</div>
+        <div style="padding:16px 20px;">{{ hbars(d.genero.items() | list, 'var(--primary)') }}</div></div>
+    <div class="card"><div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">🎂 Perfil: faixa etária {{ info("Idade dos usuários atendidos, calculada pela data de nascimento. Sem data de nascimento aparece como Não informado.") }}</div>
+        <div style="padding:16px 20px;">{{ hbars(d.faixa_etaria.items() | list | sort(attribute='0'), 'var(--secondary)') }}</div></div>
+    <div class="card"><div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">🧠 Principais CIDs {{ info("CID principal dos usuários atendidos no mês (um por usuário).") }}</div>
+        <div style="padding:16px 20px;">{{ hbars(d.top_cids, 'var(--accent)') }}</div></div>
+    <div class="card"><div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">📋 Procedimentos mais realizados {{ info("Os 10 procedimentos com mais atendimentos no mês.") }}</div>
+        <div style="padding:16px 20px;">{{ hbars(d.top_procedimentos, 'var(--primary)') }}</div></div>
+    <div class="card"><div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">📍 Local de realização {{ info("CAPS: dentro da unidade. Território: fora dela.") }}</div>
+        <div style="padding:16px 20px;">{{ hbars(d.local.items() | list, 'var(--secondary)') }}</div></div>
+    <div class="card"><div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">👨‍👩‍👧 Individual × Grupo {{ info("Conta como grupo todo atendimento lançado dentro de um grupo (Práticas corporais, Práticas expressivas etc.) e os procedimentos com a palavra grupo no nome; os demais, como individual.") }}</div>
+        <div style="padding:16px 20px;">{{ hbars(d.tipo_atendimento.items() | list, 'var(--accent)') }}</div></div>
+    <div class="card"><div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">🏆 Profissionais com mais atendimentos {{ info("Os 10 profissionais com mais atendimentos lançados no mês.") }}</div>
+        <div style="padding:16px 20px;">{{ hbars(d.top_profissionais, 'var(--secondary)') }}</div></div>
+    <div class="card"><div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">📆 Atendimentos por dia da semana {{ info("Soma dos atendimentos do mês por dia da semana. Ajuda a ver em quais dias a unidade mais atende.") }}</div>
+        <div style="padding:16px 20px;">{{ hbars(d.dia_semana, 'var(--primary)') }}</div></div>
+</div>
+
+<div class="card" style="margin-top:24px;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">👨‍⚕️ Individual × Grupo por profissional {{ info("Conta como grupo todo atendimento lançado dentro de um grupo e os procedimentos com grupo no nome; os demais, como individual. Sessões é a quantidade de grupos de atendimento da competência em que o profissional lançou pelo menos um atendimento.") }}</div>
+    {% if d.prof_service_stats %}
+    <div class="table-wrapper">
+        <table class="data-table data-table-compacta">
+            <thead><tr><th>Profissional</th><th style="text-align:right;">Individual</th><th style="text-align:right;">Grupo</th><th style="text-align:right;">Sessões (grupos)</th><th style="text-align:right;">Total</th></tr></thead>
+            <tbody>
+                {% for p in d.prof_service_stats %}
+                <tr><td>{{ p.name }}</td><td style="text-align:right;">{{ p.individual }}</td><td style="text-align:right;">{{ p.grupo }}</td><td style="text-align:right;">{{ p.total_sessoes }}</td><td style="text-align:right;font-weight:700;">{{ p.total }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:16px 20px;color:var(--muted);font-size:13px;">Sem dados no período.</div>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top:24px;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600;">🩺 Indicadores de cuidado {{ info("Contagens do mês com base nos usuários atendidos e no cadastro dos pacientes. Passe o mouse ou toque no i de cada item para ver como é calculado.") }}</div>
+    <div style="padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
+        {% for label, value, tip in [
+            ('Atendimentos em grupo', ind.pct_grupo ~ '%', 'Percentual dos atendimentos do mês em procedimentos de grupo.'),
+            ('Admissões no mês', ind.admissoes_mes, 'Pacientes cuja Data de Admissão cai no mês escolhido.'),
+            ('Desligamentos no mês', ind.desligamentos_mes, 'Pacientes cuja Data de Conclusão cai no mês escolhido.'),
+            ('Em situação de rua', ind.situacao_rua, 'Usuários atendidos no mês marcados com Situação de Rua = Sim.'),
+            ('Uso de álcool', ind.uso_alcool, 'Usuários atendidos no mês marcados como usuários de álcool.'),
+            ('Uso de crack', ind.uso_crack, 'Usuários atendidos no mês marcados como usuários de crack.'),
+            ('Uso de outras drogas', ind.uso_outras_drogas, 'Usuários atendidos no mês marcados como usuários de outras drogas.'),
+            ('Sem atendimento no mês (busca ativa)', ind.sem_atendimento_no_mes ~ ' (' ~ ind.pct_sem_atendimento ~ '%)', 'Pacientes ainda em acompanhamento (sem Data de Conclusão) que não tiveram nenhum atendimento no mês. É a lista para busca ativa; o percentual é sobre esses pacientes somados aos atendidos no mês.'),
+        ] %}
+        <div><div style="font-size:22px;font-weight:700;">{{ value }}</div>
+        <div style="font-size:12px;color:var(--muted);">{{ label }} {{ info(tip) }}</div></div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

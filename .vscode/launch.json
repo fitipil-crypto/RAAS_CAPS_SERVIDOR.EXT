@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // O interpretador é por plataforma: no Codespace há vários Pythons
+            // e nem todos têm as dependências; no Windows o iniciar_servidor.bat
+            // cria o .venv do projeto.
+            "name": "RAAS-CAPS (servidor)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "DEBUG": "false",
+                "DATABASE_URL": "sqlite:///./raas_caps.db"
+            },
+            "linux": {
+                "python": "/usr/local/python/current/bin/python3"
+            },
+            "windows": {
+                "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+            }
+        },
+        {
+            "type": "editor-browser",
+            "request": "launch",
+            "name": "Abrir navegador no localhost",
+            "url": "http://localhost:8000",
+            "webRoot": "${workspaceFolder}"
+        }
+    ]
+}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_relatorio_componentes.html" import cabecalho, botao_imprimir, seletor_formato, celula with context %}
+
+{% block title %}Competência — RAAS-CAPS{% endblock %}
+{% block page_title %}Competência{% endblock %}
+
+{% block content %}
+{{ cabecalho('🧭', 'Competência', 'Audite o mês antes de exportar o RAAS, compare competências e acompanhe a previsão de fechamento.') }}
+
+<nav class="rimp-abas no-print" aria-label="Visões da competência">
+    {% for chave, rotulo in abas.items() %}
+    <a href="/competencia?aba={{ chave }}&month={{ r.competencia }}" class="{% if chave == r.aba %}active{% endif %}">{{ rotulo }}</a>
+    {% endfor %}
+</nav>
+
+<form method="get" action="/competencia" class="card rimp-painel no-print">
+    <input type="hidden" name="aba" value="{{ r.aba }}">
+    <div class="rimp-filtros rimp-filtros-ind">
+        <div class="form-group"><label for="competenciaMes">{% if r.aba == 'comparar' %}Competência (mais recente){% else %}Competência{% endif %}</label>
+            <input type="month" id="competenciaMes" name="month" value="{{ r.competencia }}"></div>
+        {% if r.aba == 'comparar' %}
+        <div class="form-group"><label for="competenciaBase">Comparar com</label>
+            <input type="month" id="competenciaBase" name="mes_b" value="{{ mes_b }}"></div>
+        {% endif %}
+    </div>
+    <div class="rimp-acoes">
+        <button type="submit" class="btn btn-primary">Aplicar</button>
+        {{ botao_imprimir('/api/competencia/exportar') }}
+        {{ seletor_formato() }}
+    </div>
+</form>
+
+{% if r.aba == 'auditoria' %}
+<div class="card no-print" style="padding:12px 16px;margin-bottom:16px;border-left:4px solid {{ '#2e7d32' if r.dados.pode_exportar else '#c00000' }};">
+    {% if r.dados.pode_exportar %}
+    <strong>Pronto para exportar.</strong> Nenhuma pendência bloqueia o arquivo RAAS de {{ r.competencia }}.
+    {% else %}
+    <strong>Exportação não recomendada.</strong> Corrija as {{ r.dados.contagem.bloqueio }} pendência(s) que bloqueiam antes de gerar o arquivo.
+    {% endif %}
+    <a href="/exportacao?month={{ r.competencia }}" class="btn btn-outline btn-sm" style="margin-left:12px;">Ir para a exportação</a>
+</div>
+{% endif %}
+
+{% if r.resumo %}
+<div class="stats-grid">
+    {% for item in r.resumo %}
+    <div class="stat-card stat-primary"><div class="stat-icon">{{ item.icone }}</div><div class="stat-value">{{ item.valor }}</div><div class="stat-label">{{ item.label }}</div></div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if r.aba == 'previsao' and r.dados.estado == 'corrente' %}
+<p class="rimp-dica">Projeção = lançados + ritmo por dia útil × dias úteis restantes (segunda a sexta, sem feriados). A faixa esperada usa a média ± desvio dos meses anteriores.</p>
+{% endif %}
+
+<style>
+.competencia-tabela td { white-space: normal; }
+</style>
+<div class="rimp-blocos">
+    {% for bloco in r.blocos %}
+    <section class="rimp-bloco rimp-bloco-largo" style="margin-bottom:20px;">
+        <h3>{{ bloco.titulo }}</h3>
+        <div class="rimp-scroll">
+        <table class="rimp-tabela competencia-tabela">
+            <thead><tr>{% for col in bloco.colunas %}<th>{{ col.titulo }}</th>{% endfor %}</tr></thead>
+            <tbody>
+                {% for linha in bloco.linhas %}
+                <tr>{% for c in linha %}{{ celula(c, bloco.colunas[loop.index0]) }}{% endfor %}</tr>
+                {% else %}
+                <tr><td colspan="{{ bloco.colunas | length }}" class="rimp-vazio">{{ bloco.vazio }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}

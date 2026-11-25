@@ -1,0 +1,37 @@
+{# Ajuda contextual: ícone "i" com explicação. Importar com contexto:
+   {% from "_ajuda.html" import info with context %}
+   O ícone só aparece quando o admin mantém a ajuda ativa para o usuário. #}
+
+{% macro info(texto, titulo='') -%}
+{%- if user and user.ajuda_ativa -%}
+<button type="button" class="info-tip" aria-label="Ajuda{% if titulo %}: {{ titulo }}{% endif %}" data-tip="{{ texto }}"{% if titulo %} data-tip-title="{{ titulo }}"{% endif %}>i</button>
+{%- endif -%}
+{%- endmacro %}
+
+{# Explicação geral de cada tela, mostrada no "i" ao lado do título da página. #}
+{% macro info_pagina(pagina) -%}
+{%- set textos = {
+    'dashboard': ('Dashboard', 'Resumo do mês atual: pacientes atendidos, atendimentos, procedimentos usados e a média por paciente, mais o gráfico dos últimos 7 dias. Use as Ações Rápidas para ir direto às tarefas mais comuns.'),
+    'pacientes': ('Pacientes', 'Cadastro dos usuários do CAPS. Os dados daqui (CNS, nascimento, CID, admissão) vão para o arquivo RAAS. Use a busca por nome, CNS, CPF ou prontuário e o olho 👁 para ver a ficha completa.'),
+    'profissionais': ('Profissionais', 'Profissionais que realizam os atendimentos. O CNS e o CBO são gravados no RAAS; sem profissional ativo não é possível lançar atendimentos.'),
+    'aniversariantes': ('Aniversariantes', 'Pacientes e profissionais que fazem aniversário no mês escolhido, com destaque para hoje e para os próximos 7 dias. Filtre por tipo, busque por nome e imprima a lista para o mural. Só entra quem tem data de nascimento cadastrada.'),
+    'procedimentos': ('Procedimentos', 'Lista de procedimentos (códigos SIGTAP) que podem ser lançados. Desative os que a unidade não usa para a lista de lançamento ficar enxuta.'),
+    'registros': ('Registros RAAS', 'Atendimentos lançados por competência (mês). Cada paciente tem um grupo que abre com a lista de atendimentos. Todo lançamento novo é feito em "Digitação RAAS" — um atendimento ou vários (até 30 pacientes), soltos ou dentro de um grupo. Use ✏️ para corrigir um atendimento já lançado.'),
+    'grupos': ('Grupos', 'Os grupos de atendimento da competência, com descrição, data e horário, e dentro de cada um os pacientes com os procedimentos e quem os realizou. Os grupos são criados em Registros RAAS → Digitação RAAS → Lançar grupo; o número de cada um vem da ordem de data e horário do mês.'),
+    'eventos': ('Eventos', 'Lançamento múltiplo: crie um evento (ex.: oficina), marque os participantes e gere um atendimento para cada um, de uma só vez.'),
+    'importar': ('Importar RAAS', 'Traz atendimentos de um arquivo RAAS no formato DATASUS. Primeiro o arquivo é analisado (nada é gravado), depois você confirma a importação.'),
+    'exportacao': ('Exportação RAAS', 'Gera o arquivo RAAS (.txt) da competência para enviar ao DATASUS. Confira o cabeçalho (UF, CNES, órgão, versão) antes de baixar.'),
+    'indicadores': ('Indicadores CAPS', 'Painel do mês escolhido: produção e comparativo dos últimos 12 meses, perfil dos usuários, procedimentos e profissionais com mais atendimentos, dia da semana e indicadores de cuidado. Passe o mouse ou toque no "i" de cada indicador para ver como é calculado.'),
+    'relatorio_pacientes': ('Relatório de Pacientes', 'Lista de pacientes com filtros por nome, profissional, situação, sexo, etnia, bairro, CID, idade e período de admissão. Use Imprimir PDF para abrir o relatório em uma nova aba.'),
+    'configuracoes': ('Configurações', 'Informações do sistema e da versão instalada.'),
+    'backup': ('Backup', 'Baixe uma cópia de todos os dados em um arquivo. Restaurar um backup SUBSTITUI os dados atuais, por isso só o administrador pode fazê-lo.'),
+    'excluir': ('Excluir Dados', 'Remove categorias inteiras de dados de forma permanente. Exige digitar EXCLUIR e não tem desfazer: faça um backup antes.'),
+    'roadmap': ('Roadmap', 'O que já foi feito e o que está planejado para o sistema.'),
+    'acesso': ('Controle de Acesso', 'Usuários, perfis e senhas. O administrador também liga/desliga a ajuda (ícones "i" e tutoriais) de cada usuário.'),
+    'logs': ('Logs do Sistema', 'Histórico de ações e acessos, para auditoria.'),
+    'tutoriais': ('Tutoriais', 'Guias passo a passo de todo o fluxo, do cadastro à exportação do RAAS.'),
+} -%}
+{%- if user and user.ajuda_ativa and pagina in textos -%}
+<button type="button" class="info-tip" aria-label="Sobre esta tela" data-tip="{{ textos[pagina][1] }}" data-tip-title="{{ textos[pagina][0] }}" data-tip-link="/tutoriais#{{ pagina }}">i</button>
+{%- endif -%}
+{%- endmacro %}

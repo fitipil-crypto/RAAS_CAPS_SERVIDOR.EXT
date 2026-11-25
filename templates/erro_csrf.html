@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title>Acesso protegido — RAAS-CAPS</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="csrf-error-body">
+    <main class="csrf-error-page">
+        <section class="csrf-error-card" aria-labelledby="csrf-error-title">
+            <div class="csrf-error-mark" aria-hidden="true">
+                <svg viewBox="0 0 48 48" fill="none">
+                    <path d="M24 5 39 11v11c0 10-6.4 16.7-15 21-8.6-4.3-15-11-15-21V11L24 5Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" />
+                    <path d="M24 16v9m0 6h.02" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+                </svg>
+            </div>
+            <p class="csrf-error-label">RAAS-CAPS · acesso protegido</p>
+            <h1 id="csrf-error-title">Este envio foi bloqueado por segurança</h1>
+            <p class="csrf-error-description">Não foi possível confirmar a origem desta solicitação. Volte ao acesso e tente novamente.</p>
+            <div class="csrf-error-guidance">
+                <span class="csrf-error-guidance-mark" aria-hidden="true">i</span>
+                <p>Se a mensagem aparecer novamente, atualize a página de login antes de enviar seus dados.</p>
+            </div>
+            <a class="csrf-error-action" href="/login">Voltar ao login</a>
+            <p class="csrf-error-footer">Se precisar, peça ajuda ao responsável pelo sistema.</p>
+        </section>
+    </main>
+</body>
+</html>

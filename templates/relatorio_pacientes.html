@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_relatorio_componentes.html" import cabecalho, botao_imprimir, filtros_pacientes, seletor_formato %}
+
+{% block title %}Relatório de Pacientes — RAAS-CAPS{% endblock %}
+{% block page_title %}Relatório de Pacientes{% endblock %}
+
+{% block content %}
+{{ cabecalho('🗒️', 'Relatório de Pacientes', 'Use os filtros para montar a lista e abra o PDF em uma nova aba.') }}
+
+{% set f = r.filtros %}
+<form method="get" action="/relatorios/pacientes" class="card rimp-painel no-print" id="relatorioPacientesForm">
+    <input type="hidden" name="tipo" value="pacientes">
+    <input type="hidden" name="campos_enviados" value="1">
+    {% for campo in r.campos %}<input type="hidden" name="campo" value="{{ campo }}">{% endfor %}
+
+    {{ filtros_pacientes(f, opcoes) }}
+
+    <div class="rimp-acoes">
+        {{ botao_imprimir('/api/relatorios/impressao/exportar') }}
+        <a href="/relatorios/pacientes" class="btn btn-outline">Limpar filtros</a>
+        <span class="rimp-contagem">{{ r.linhas | length }} paciente(s)</span>
+        {{ seletor_formato() }}
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Tutoriais — RAAS-CAPS{% endblock %}
+{% block page_title %}Tutoriais{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>🎓 Tutoriais</h1>
+        <p>Passo a passo de todo o fluxo, do cadastro à exportação do RAAS</p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:18px;" id="visao-geral">
+    <div class="card-body">
+        <h2 style="font-size:17px;">Visão geral do fluxo</h2>
+        <p style="color:var(--muted);margin-top:4px;">Todo mês o caminho é o mesmo. Clique em uma etapa para ir ao guia dela.</p>
+        <div class="tuto-fluxo">
+            {% for nome, alvo in fluxo %}
+            <a class="etapa" href="#{{ alvo }}">{{ loop.index }}. {{ nome }}</a>
+            {% if not loop.last %}<span class="seta">→</span>{% endif %}
+            {% endfor %}
+        </div>
+        <div class="tuto-dica">
+            <strong>Guarde isto:</strong> os registros RAAS não são removidos automaticamente. Faça backups periódicos conforme a rotina da unidade.
+        </div>
+        <div class="tuto-dica tuto-dica-vinho">
+            <strong>Dica fundamental:</strong> para não precisar digitar paciente por paciente, comece importando os arquivos
+            das 6 últimas competências (ou mais) em <strong>📥 Importar RAAS</strong>. Os pacientes, os procedimentos e os
+            profissionais que aparecem nesses arquivos são cadastrados sozinhos. Depois é só completar à mão o que o arquivo
+            não traz: em <strong>Profissionais</strong>, corrigir o nome, informar CPF e DN; em <strong>Procedimentos</strong>,
+            corrigir o nome.
+        </div>
+    </div>
+</div>
+
+<div class="tuto-layout">
+    <nav class="tuto-toc" aria-label="Índice dos tutoriais">
+        {% for s in secoes %}
+        <a href="#{{ s.id }}" data-alvo="{{ s.id }}">{{ s.icone }} {{ s.titulo }}</a>
+        {% endfor %}
+    </nav>
+    <div>
+        {% for s in secoes %}
+        <section class="tuto-section" id="{{ s.id }}">
+            <h2>{{ s.icone }} {{ s.titulo }}</h2>
+            <p class="tuto-resumo">{{ s.resumo }}</p>
+            <div class="tuto-quem">
+                {% for p in s.perfis_rotulos %}<span class="badge badge-blue">{{ p }}</span>{% endfor %}
+                {% if not s.acessivel %}<span class="badge badge-gray">Seu perfil não acessa esta tela</span>{% endif %}
+            </div>
+            <ol class="tuto-passos">
+                {% for passo in s.passos %}<li>{{ passo }}</li>{% endfor %}
+            </ol>
+            {% if s.dica %}<div class="tuto-dica">💡 {{ s.dica }}</div>{% endif %}
+            {% if s.acessivel and s.link %}
+            <p style="margin-top:12px;"><a class="btn btn-outline btn-sm" href="{{ s.link }}">Abrir a tela →</a></p>
+            {% endif %}
+        </section>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Destaca no índice a seção que está na tela.
+(function () {
+    const links = new Map(Array.from(document.querySelectorAll('.tuto-toc a')).map(a => [a.dataset.alvo, a]));
+    if (!('IntersectionObserver' in window)) return;
+    const obs = new IntersectionObserver((entries) => {
+        entries.forEach((e) => {
+            if (!e.isIntersecting) return;
+            links.forEach(a => a.classList.remove('ativo'));
+            links.get(e.target.id)?.classList.add('ativo');
+        });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('.tuto-section').forEach(s => obs.observe(s));
+})();
+</script>
+{% endblock %}

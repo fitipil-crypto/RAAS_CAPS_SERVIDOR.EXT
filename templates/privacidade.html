@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aviso de Privacidade — RAAS-CAPS</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .policy { max-width: 860px; margin: 32px auto; padding: 0 16px; }
+        .policy h2 { margin-top: 28px; font-size: 18px; }
+        .policy p, .policy li { line-height: 1.6; font-size: 14px; }
+        .policy table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+        .policy th, .policy td { text-align: left; padding: 8px 10px; border: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+    </style>
+</head>
+<body>
+<div class="policy">
+  <div class="card"><div class="card-body" style="padding:28px;">
+    <h1>🔒 Aviso de Privacidade — RAAS-CAPS</h1>
+    <p style="color:var(--muted);">Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018). Termo vigente: v{{ termo_versao }}.</p>
+
+    <h2>1. Quem é o controlador</h2>
+    <p><strong>{{ lgpd.controlador_nome or 'Estabelecimento (CAPS) responsável pelo sistema — preencher em LGPD › Controlador' }}</strong>{% if lgpd.controlador_cnpj %} — CNPJ {{ lgpd.controlador_cnpj }}{% endif %}.</p>
+
+    <h2>2. Encarregado pelo tratamento de dados (DPO)</h2>
+    {% if lgpd.encarregado_nome %}
+    <p>{{ lgpd.encarregado_nome }}{% if lgpd.encarregado_email %} · <a href="mailto:{{ lgpd.encarregado_email }}">{{ lgpd.encarregado_email }}</a>{% endif %}{% if lgpd.encarregado_telefone %} · {{ lgpd.encarregado_telefone }}{% endif %}</p>
+    {% else %}
+    <p>Procure a coordenação do serviço para exercer seus direitos; o contato do encarregado será divulgado aqui.</p>
+    {% endif %}
+
+    <h2>3. Quais dados tratamos e para quê</h2>
+    <table>
+      <tr><th>Titulares</th><th>Dados</th><th>Finalidade</th></tr>
+      <tr><td>Pacientes / usuários do CAPS</td>
+          <td>Nome, CPF, CNS, nascimento, sexo, raça/cor, filiação, contatos, endereço e <strong>dados de saúde</strong> (CID, procedimentos e atendimentos realizados, uso de substâncias, situação de rua)</td>
+          <td>Prestação e registro da atenção psicossocial, e envio das produções RAAS ao SUS (DATASUS/Secretaria de Saúde)</td></tr>
+      <tr><td>Profissionais de saúde</td><td>Nome, CPF, CNS, CBO, equipe</td><td>Identificação do profissional nos atendimentos e na produção RAAS</td></tr>
+      <tr><td>Usuários do sistema</td><td>Nome, login, senha (armazenada apenas como hash), registros de acesso</td><td>Controle de acesso e auditoria (segurança)</td></tr>
+    </table>
+
+    <h2>4. Bases legais</h2>
+    <p>Os dados de saúde são <strong>dados pessoais sensíveis</strong> (art. 5º, II) e são tratados, sem necessidade de consentimento, com fundamento no art. 11, II:</p>
+    <ul>{% for chave, texto in bases_legais.items() %}<li>{{ texto }}</li>{% endfor %}</ul>
+    <p>A base aplicada a cada paciente fica registrada no seu cadastro.</p>
+
+    <h2>5. Compartilhamento</h2>
+    <p>Os dados são compartilhados apenas com o Sistema Único de Saúde (Secretaria Municipal/Estadual de Saúde e Ministério da Saúde, via BPA/RAAS) para cumprimento de obrigação legal e execução de política pública, e com os profissionais autorizados do próprio serviço, conforme o perfil de acesso. Não vendemos nem compartilhamos dados para fins comerciais.</p>
+
+    <h2>6. Por quanto tempo guardamos</h2>
+    <ul>
+      <li>Atendimentos (registros RAAS): mantidos no sistema; a produção enviada ao SUS e o prontuário seguem os prazos legais da área da saúde.</li>
+      <li>Cadastro de pacientes: enquanto durar o acompanhamento e a obrigação legal de guarda do prontuário.</li>
+      <li>Registros de auditoria (quem acessou o quê): no mínimo 6 meses.</li>
+    </ul>
+
+    <h2>7. Seus direitos (art. 18)</h2>
+    <p>Você pode solicitar: confirmação de que tratamos seus dados; acesso a eles; correção; anonimização, bloqueio ou eliminação quando cabível; portabilidade; informação sobre com quem compartilhamos; e revogação de consentimento, quando for a base utilizada. Responderemos em até <strong>15 dias</strong>. Procure a coordenação do serviço{% if lgpd.encarregado_email %} ou o encarregado acima{% endif %}. Dados de prontuário podem ter eliminação limitada por obrigação legal de guarda; nesses casos aplicamos a anonimização quando possível.</p>
+
+    <h2>8. Como protegemos</h2>
+    <ul>
+      <li>Acesso somente com login individual, senha forte, bloqueio por tentativas e encerramento por inatividade;</li>
+      <li>Perfis de acesso (administrador, coordenador, operador) com o mínimo necessário;</li>
+      <li>Registro de auditoria dos acessos, alterações e exportações de dados pessoais;</li>
+      <li>Comunicação protegida por HTTPS quando o sistema é usado em rede, backups restritos e termo de confidencialidade para todos os usuários.</li>
+    </ul>
+
+    <p style="margin-top:28px;"><a href="{% if user %}/{% else %}/login{% endif %}" class="btn btn-outline">← Voltar</a></p>
+  </div></div>
+</div>
+</body>
+</html>

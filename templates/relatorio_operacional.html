@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_relatorio_componentes.html" import cabecalho, botao_imprimir, seletor_formato with context %}
+
+{% block title %}{{ r.titulo }} — RAAS-CAPS{% endblock %}
+{% block page_title %}{{ r.titulo }}{% endblock %}
+
+{% block content %}
+{{ cabecalho(r.icone, r.titulo, r.descricao) }}
+
+<form method="get" action="/relatorios/operacionais/{{ r.chave }}" class="card rimp-painel no-print">
+    <input type="hidden" name="relatorio" value="{{ r.chave }}">
+    {% if r.chave in ['atendimentos', 'producao'] %}
+    <div class="rimp-filtros">
+        <div class="form-group"><label>Período inicial</label><input type="date" name="de" value="{{ r.filtros.de }}"></div>
+        <div class="form-group"><label>Período final</label><input type="date" name="ate" value="{{ r.filtros.ate }}"></div>
+        <div class="form-group"><label>Profissional</label>
+            <select name="profissional"><option value="">Todos</option>
+                {% for p in r.opcoes.profissionais %}<option value="{{ p.id }}" {% if p.id == r.filtros.profissional %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Procedimento</label>
+            <select name="procedimento"><option value="">Todos</option>
+                {% for p in r.opcoes.procedimentos %}<option value="{{ p.id }}" {% if p.id == r.filtros.procedimento %}selected{% endif %}>{{ p.code }} — {{ p.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Local</label>
+            <select name="local"><option value="">Todos</option><option value="C" {% if r.filtros.local == 'C' %}selected{% endif %}>CAPS</option><option value="T" {% if r.filtros.local == 'T' %}selected{% endif %}>Território</option></select>
+        </div>
+    </div>
+    {% elif r.chave == 'perfil' %}
+    <div class="rimp-filtros">
+        <div class="form-group"><label>Situação</label><select name="situacao"><option value="">Todas</option>{% for valor, rotulo in r.opcoes.situacoes.items() %}<option value="{{ valor }}" {% if valor == r.filtros.situacao %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label>Bairro</label><input name="bairro" value="{{ r.filtros.bairro }}" list="bairros" placeholder="Parte do nome"><datalist id="bairros">{% for bairro in r.opcoes.bairros %}<option value="{{ bairro }}">{% endfor %}</datalist></div>
+        <div class="form-group"><label>Sexo</label><select name="sexo"><option value="">Todos</option>{% for valor, rotulo in r.opcoes.sexos.items() %}<option value="{{ valor }}" {% if valor == r.filtros.sexo %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label>Etnia</label><select name="etnia"><option value="">Todas</option>{% for valor, rotulo in r.opcoes.etnias.items() %}<option value="{{ valor }}" {% if valor == r.filtros.etnia %}selected{% endif %}>{{ rotulo | title }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label>Idade mínima</label><input type="number" name="idade_min" min="0" max="120" value="{{ r.filtros.idade_min }}"></div>
+        <div class="form-group"><label>Idade máxima</label><input type="number" name="idade_max" min="0" max="120" value="{{ r.filtros.idade_max }}"></div>
+    </div>
+    {% elif r.chave == 'busca-ativa' %}
+    <div class="rimp-filtros">
+        <div class="form-group"><label>Sem atendimento há pelo menos</label><div style="display:flex;align-items:center;gap:8px;"><input type="number" name="dias" min="1" max="999" value="{{ r.filtros.dias }}"><span>dias</span></div></div>
+        <div class="form-group"><label>Situação</label><select name="situacao"><option value="">Todas em acompanhamento</option>{% for valor, rotulo in r.opcoes.situacoes.items() %}<option value="{{ valor }}" {% if valor == r.filtros.situacao %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label>Bairro</label><input name="bairro" value="{{ r.filtros.bairro }}" list="bairros-busca" placeholder="Parte do nome"><datalist id="bairros-busca">{% for bairro in r.opcoes.bairros %}<option value="{{ bairro }}">{% endfor %}</datalist></div>
+    </div>
+    {% elif r.chave == 'incompletos' %}
+    <div class="rimp-filtros">
+        <div class="form-group"><label>Verificar apenas</label><select name="faltando"><option value="">Qualquer informação pendente</option>{% for chave, rotulo, extrator in r.campos_incompletos %}<option value="{{ chave }}" {% if chave == r.filtros.faltando %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label>Situação</label><select name="situacao"><option value="">Todas</option>{% for valor, rotulo in r.opcoes.situacoes.items() %}<option value="{{ valor }}" {% if valor == r.filtros.situacao %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label>Bairro</label><input name="bairro" value="{{ r.filtros.bairro }}" list="bairros-incompletos" placeholder="Parte do nome"><datalist id="bairros-incompletos">{% for bairro in r.opcoes.bairros %}<option value="{{ bairro }}">{% endfor %}</datalist></div>
+    </div>
+    {% endif %}
+
+    <div class="rimp-acoes">
+        {{ botao_imprimir('/api/relatorios/operacional/exportar') }}
+        <a href="/relatorios/operacionais/{{ r.chave }}" class="btn btn-outline">Limpar filtros</a>
+        {{ seletor_formato() }}
+    </div>
+</form>
+
+{% endblock %}

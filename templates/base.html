@@ -1,0 +1,135 @@
+{%- from "_ajuda.html" import info_pagina with context -%}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RAAS-CAPS{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if user %}
+    {#- Páginas largas (tabelas de relatório) abrem com o menu recolhido (o ☰ reabre)
+        e ocupam a largura toda da janela. -#}
+    {%- set menu_recolhido = active_page == 'relatorios_impressao' %}
+    <div class="app-layout">
+        <aside class="sidebar{% if menu_recolhido %} collapsed{% endif %}" id="sidebar">
+            <div class="sidebar-header">
+                <span class="sidebar-logo">🏥</span>
+                <span class="sidebar-title">RAAS-CAPS</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">📊 Dashboard</a>
+                {% if user.ajuda_ativa %}
+                <a href="/tutoriais" class="nav-item {% if active_page == 'tutoriais' %}active{% endif %}">🎓 Tutoriais</a>
+                {% endif %}
+                <details class="nav-group" data-group="cadastros">
+                    <summary class="nav-group-title">Cadastros</summary>
+                    <a href="/pacientes" class="nav-item {% if active_page == 'pacientes' %}active{% endif %}">👥 Pacientes</a>
+                    <a href="/profissionais" class="nav-item {% if active_page == 'profissionais' %}active{% endif %}">👨‍⚕️ Profissionais</a>
+                    <a href="/procedimentos" class="nav-item {% if active_page == 'procedimentos' %}active{% endif %}">📋 Procedimentos</a>
+                    <a href="/aniversariantes" class="nav-item {% if active_page == 'aniversariantes' %}active{% endif %}">🎂 Aniversariantes</a>
+                </details>
+                <details class="nav-group" data-group="atendimentos">
+                    <summary class="nav-group-title">Atendimentos</summary>
+                    <a href="/registros" class="nav-item {% if active_page == 'registros' %}active{% endif %}">📝 Registros RAAS</a>
+                    <a href="/grupos" class="nav-item {% if active_page == 'grupos' %}active{% endif %}">👥 Grupos</a>
+                    {% if user.role in ['admin', 'coordenador'] %}
+                    <a href="/eventos" class="nav-item {% if active_page == 'eventos' %}active{% endif %}">🎉 Eventos</a>
+                    {% endif %}
+                </details>
+                <details class="nav-group" data-group="raas">
+                    <summary class="nav-group-title">RAAS</summary>
+                    {% if user.role == 'admin' %}
+                    <a href="/importar" class="nav-item {% if active_page == 'importar' %}active{% endif %}">📥 Importar RAAS</a>
+                    {% endif %}
+                    <a href="/exportacao" class="nav-item {% if active_page == 'exportacao' %}active{% endif %}">📤 Exportação RAAS</a>
+                </details>
+                {% if user.role != 'operador' %}
+                <details class="nav-group" data-group="analises">
+                    <summary class="nav-group-title">Análises</summary>
+                    <a href="/indicadores" class="nav-item {% if active_page == 'indicadores' %}active{% endif %}">🎯 Indicadores CAPS</a>
+                    <a href="/competencia" class="nav-item {% if active_page == 'competencia' %}active{% endif %}">🧭 Competência</a>
+                </details>
+                <details class="nav-group" data-group="relatorios">
+                    <summary class="nav-group-title">Relatórios</summary>
+                    <a href="/relatorios-impressao" class="nav-item {% if active_page == 'relatorios_impressao' %}active{% endif %}">🖨️ Relatórios Impressão</a>
+                </details>
+                {% endif %}
+                <details class="nav-group" data-group="sistema">
+                    <summary class="nav-group-title">Sistema</summary>
+                    {% if user.role in ['admin', 'gestor'] %}
+                    <a href="/unidades" class="nav-item {% if active_page == 'unidades' %}active{% endif %}">🏢 Unidades (CAPS)</a>
+                    {% endif %}
+                    <a href="/configuracoes" class="nav-item {% if active_page == 'configuracoes' %}active{% endif %}">⚙️ Configurações</a>
+                    {% if user.role != 'operador' %}
+                    <a href="/backup" class="nav-item {% if active_page == 'backup' %}active{% endif %}">💾 Backup</a>
+                    {% endif %}
+                    <a href="/acesso" class="nav-item {% if active_page == 'acesso' %}active{% endif %}">🔐 Controle de Acesso</a>
+                    {% if user.role in ['admin', 'coordenador'] %}
+                    <a href="/lgpd" class="nav-item {% if active_page == 'lgpd' %}active{% endif %}">🔒 LGPD</a>
+                    {% endif %}
+                    <a href="/privacidade" class="nav-item" target="_blank">📜 Aviso de Privacidade</a>
+                    {% if user.role == 'admin' %}
+                    <a href="/logs" class="nav-item {% if active_page == 'logs' %}active{% endif %}">📋 Logs do Sistema</a>
+                    {% endif %}
+                    {% if user.role == 'admin' %}
+                    <a href="/excluir" class="nav-item {% if active_page == 'excluir' %}active{% endif %}">🗑️ Excluir Dados</a>
+                    {% endif %}
+                    <a href="/roadmap" class="nav-item {% if active_page == 'roadmap' %}active{% endif %}">🗺️ Roadmap</a>
+                </details>
+            </nav>
+        </aside>
+
+        <div class="main-content{% if menu_recolhido %} expanded{% endif %}" id="mainContent">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+                    <span class="topbar-title">{% block page_title %}Dashboard{% endblock %}</span>
+                    {{ info_pagina(active_page) }}
+                </div>
+                <div class="topbar-right">
+                    {#- Seletor de unidade: aparece quando há mais de uma opção
+                        (admin/gestor) ou para mostrar em qual CAPS se está. O
+                        POST é um formulário normal, então passa pela checagem
+                        de Origin do SegurancaMiddleware. -#}
+                    {% if unidades_disponiveis %}
+                    <form method="post" action="/unidades/ativa" class="unidade-seletor">
+                        <select name="unidade_id" onchange="this.form.submit()" title="Unidade (CAPS) ativa">
+                            {% if pode_ver_todas %}
+                            <option value="todas" {% if not unidade_ativa %}selected{% endif %}>🏢 Todas as unidades</option>
+                            {% endif %}
+                            {% for u in unidades_disponiveis %}
+                            <option value="{{ u.id }}" {% if unidade_ativa == u.id %}selected{% endif %}>
+                                {{ u.nome }} — {{ u.modalidade_nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <noscript><button type="submit" class="btn btn-sm btn-outline">Trocar</button></noscript>
+                    </form>
+                    {% endif %}
+                    <span class="topbar-date" id="currentDate"></span>
+                    <div class="user-badge">
+                        <div class="user-avatar">{{ user.name[0] | upper }}</div>
+                        <span class="user-name">{{ user.name }}</span>
+                        <span class="user-role role-{{ user.role }}">{{ user.role }}</span>
+                    </div>
+                    <a href="/logout" class="btn-logout">🚪 Sair</a>
+                </div>
+            </header>
+
+            <main class="page-content{% if menu_recolhido %} page-content-larga{% endif %}">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    {% else %}
+    {% block no_auth_content %}{% endblock %}
+    {% endif %}
+
+    <div id="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

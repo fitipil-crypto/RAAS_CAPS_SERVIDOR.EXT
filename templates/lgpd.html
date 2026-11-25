@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}LGPD — RAAS-CAPS{% endblock %}
+{% block page_title %}LGPD{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🔒 LGPD — Privacidade e Proteção de Dados</h1>
+    <p>Conformidade com a Lei 13.709/2018 · <a href="/privacidade" target="_blank">Aviso de Privacidade</a></p>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>Painel de conformidade</span></div>
+    <div class="card-body">
+        <table class="data-table">
+            {% for nome, ok, dica in verificacoes %}
+            <tr>
+                <td style="width:36px;">{% if ok %}✅{% else %}⚠️{% endif %}</td>
+                <td>{{ nome }}</td>
+                <td style="color:var(--muted);font-size:13px;">{% if not ok %}{{ dica }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>Controlador e Encarregado (DPO)</span></div>
+    <div class="card-body">
+        <form id="formConfig" onsubmit="salvarConfig(event)">
+            <div class="form-row">
+                <div class="form-group" style="flex:2"><label>Controlador (nome do serviço/órgão)</label><input name="controlador_nome" value="{{ lgpd.controlador_nome }}" {% if user.role != 'admin' %}disabled{% endif %}></div>
+                <div class="form-group"><label>CNPJ</label><input name="controlador_cnpj" value="{{ lgpd.controlador_cnpj }}" {% if user.role != 'admin' %}disabled{% endif %}></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:2"><label>Encarregado (nome)</label><input name="encarregado_nome" value="{{ lgpd.encarregado_nome }}" {% if user.role != 'admin' %}disabled{% endif %}></div>
+                <div class="form-group" style="flex:2"><label>E-mail</label><input type="email" name="encarregado_email" value="{{ lgpd.encarregado_email }}" {% if user.role != 'admin' %}disabled{% endif %}></div>
+                <div class="form-group"><label>Telefone</label><input name="encarregado_telefone" value="{{ lgpd.encarregado_telefone }}" {% if user.role != 'admin' %}disabled{% endif %}></div>
+            </div>
+            {% if user.role == 'admin' %}<button class="btn btn-primary" type="submit">Salvar</button>{% endif %}
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>Solicitações de titulares (prazo: 15 dias)</span></div>
+    <div class="card-body">
+        <form id="formSolicitacao" onsubmit="criarSolicitacao(event)" style="margin-bottom:18px;">
+            <div class="form-row">
+                <div class="form-group" style="flex:2"><label>Nome do titular</label><input name="titular_nome" required></div>
+                <div class="form-group" style="flex:2"><label>Tipo</label>
+                    <select name="tipo">{% for k, v in tipos.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+            </div>
+            <div class="form-group"><label>Descrição</label><input name="descricao"></div>
+            <button class="btn btn-secondary" type="submit">Registrar solicitação</button>
+        </form>
+        <div class="table-wrapper"><table class="data-table"><thead><tr>
+            <th>Titular</th><th>Tipo</th><th>Prazo</th><th>Status</th><th></th>
+        </tr></thead><tbody id="tbSolicitacoes"></tbody></table></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><span>Incidentes de segurança (art. 48)</span></div>
+    <div class="card-body">
+        {% if user.role == 'admin' %}
+        <form id="formIncidente" onsubmit="criarIncidente(event)" style="margin-bottom:18px;">
+            <div class="form-row">
+                <div class="form-group"><label>Data da ocorrência</label><input type="date" name="ocorrido_em" required></div>
+                <div class="form-group"><label>Risco</label><select name="risco"><option value="baixo">Baixo</option><option value="medio">Médio</option><option value="alto">Alto</option></select></div>
+                <div class="form-group"><label>Titulares afetados</label><input name="titulares_afetados" placeholder="ex.: 12"></div>
+            </div>
+            <div class="form-group"><label>O que aconteceu</label><input name="descricao" required></div>
+            <div class="form-group"><label>Dados afetados</label><input name="dados_afetados"></div>
+            <div class="form-group"><label>Medidas adotadas</label><input name="medidas"></div>
+            <label style="font-size:13px;"><input type="checkbox" name="comunicado_anpd"> Comunicado à ANPD</label>
+            <label style="font-size:13px;margin-left:14px;"><input type="checkbox" name="comunicado_titulares"> Comunicado aos titulares</label>
+            <div style="margin-top:10px;"><button class="btn btn-secondary" type="submit">Registrar incidente</button></div>
+        </form>
+        {% endif %}
+        <div class="table-wrapper"><table class="data-table"><thead><tr>
+            <th>Data</th><th>Descrição</th><th>Risco</th><th>ANPD</th><th>Titulares</th>
+        </tr></thead><tbody id="tbIncidentes"></tbody></table></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/lgpd.js"></script>
+{% endblock %}

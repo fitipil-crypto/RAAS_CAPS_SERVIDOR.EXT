@@ -1,0 +1,20 @@
+fastapi==0.149.0
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.5
+jinja2==3.1.6
+python-multipart>=0.0.32
+python-dotenv>=1.2.4
+pydantic==2.14.1
+pydantic-settings==2.16.0
+itsdangerous==2.2.0
+bcrypt>=5.0.0
+python-dateutil>=2.9.0.post0
+openpyxl==3.1.5
+fpdf2==2.8.9
+
+# ── Edição servidor ──
+# Driver do PostgreSQL (binário: não precisa compilar nem de libpq no sistema).
+psycopg[binary]==3.2.12
+# Servidor de produção: o uvicorn sozinho roda em um processo e não se recupera
+# de um worker travado. O gunicorn supervisiona os workers uvicorn.
+gunicorn==24.0.0

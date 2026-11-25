@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAAS-CAPS — Primeiro acesso</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .termo { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.55; background: var(--muted-bg); margin-bottom: 14px; }
+        .termo li { margin-bottom: 4px; }
+        .login-card.wide { max-width: 560px; }
+    </style>
+</head>
+<body>
+<div class="login-container">
+  <div class="login-card wide fade-in">
+    <div class="login-header">
+        <div class="login-logo">🔒</div>
+        <h1>Primeiro acesso</h1>
+        <p>Olá, {{ usuario.name }}. Antes de continuar:</p>
+    </div>
+    <form id="formPrimeiroAcesso" class="login-form" onsubmit="enviar(event)">
+        <p style="font-size:13px;color:var(--muted);">
+            {% if troca_obrigatoria %}Sua senha é provisória e precisa ser trocada. {% endif %}
+            Leia e aceite o termo de uso e confidencialidade (v{{ termo_versao }}).
+        </p>
+        <div class="termo">
+            <strong>Termo de Uso e Confidencialidade</strong>
+            <p>Este sistema trata dados pessoais e <strong>dados sensíveis de saúde</strong> de pacientes (LGPD, Lei 13.709/2018). Ao acessá-lo, eu me comprometo a:</p>
+            <ol>
+                <li>Usar o sistema somente para as finalidades do meu trabalho no serviço, acessando apenas os dados necessários;</li>
+                <li>Manter sigilo sobre toda informação de pacientes, mesmo após o fim do meu vínculo, nos termos do sigilo profissional;</li>
+                <li>Não compartilhar meu login e senha, não deixar a sessão aberta sem supervisão e sair ao terminar;</li>
+                <li>Não copiar, fotografar, enviar por aplicativos de mensagem ou e-mail pessoal, nem exportar dados de pacientes fora do necessário e sem autorização da coordenação;</li>
+                <li>Comunicar imediatamente à coordenação/encarregado qualquer suspeita de acesso indevido, perda de equipamento ou vazamento;</li>
+                <li>Estar ciente de que meus acessos, alterações e exportações são registrados em trilha de auditoria.</li>
+            </ol>
+            <p>O descumprimento pode gerar responsabilização administrativa, civil e penal. Veja também o <a href="/privacidade" target="_blank">Aviso de Privacidade</a>.</p>
+        </div>
+        <div class="form-group">
+            <label>Senha atual</label>
+            <input type="password" name="current_password" required autocomplete="current-password">
+        </div>
+        <div class="form-group">
+            <label>Nova senha</label>
+            <input type="password" name="new_password" required minlength="6" autocomplete="new-password">
+            <small style="color:var(--muted);">{{ senha_regra }}</small>
+        </div>
+        <div class="form-group">
+            <label>Confirmar nova senha</label>
+            <input type="password" name="confirm_password" required minlength="6" autocomplete="new-password">
+        </div>
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:10px 0;">
+            <input type="checkbox" name="aceite" id="aceite" required>
+            <span>Li e aceito o termo de uso e confidencialidade.</span>
+        </label>
+        <div id="erro" class="alert alert-error" style="display:none;"></div>
+        <button type="submit" class="btn btn-primary btn-lg btn-block">Continuar</button>
+        <p style="text-align:center;margin-top:12px;"><a href="/logout" style="font-size:12px;">Sair</a></p>
+    </form>
+  </div>
+</div>
+<script>
+async function enviar(e) {
+    e.preventDefault();
+    const f = e.target, erro = document.getElementById('erro');
+    erro.style.display = 'none';
+    const resp = await fetch('/api/lgpd/primeiro-acesso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            current_password: f.current_password.value,
+            new_password: f.new_password.value,
+            confirm_password: f.confirm_password.value,
+            aceite: f.aceite.checked,
+        }),
+    });
+    if (resp.ok) { location.href = '/'; return; }
+    const body = await resp.json().catch(() => ({}));
+    let msg = body.detail || 'Erro ao salvar';
+    if (Array.isArray(msg)) msg = msg.map(d => (d.msg || '').replace('Value error, ', '')).join(' ');
+    erro.textContent = '⚠️ ' + msg;
+    erro.style.display = 'block';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% from "_ajuda.html" import info with context %}
+{% block title %}Grupos — RAAS-CAPS{% endblock %}
+{% block page_title %}Grupos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>👥 Registros RAAS – Grupos</h1>
+        <p>Grupos de atendimento da competência, com data, descrição e horário</p>
+    </div>
+    <div class="month-selector">
+        <label>Competência: {{ info("Mês de referência. Os grupos são numerados em sequência crescente pela data e pelo horário dentro da competência.", "Competência") }}</label>
+        <input type="month" id="monthPicker" value="{{ sel_month }}" onchange="trocarMesGrupos()">
+        <button class="btn btn-outline no-print" onclick="window.print()" title="Imprimir a relação de grupos">🖨️ Imprimir</button>
+        {% if user.role in ['admin', 'operador'] %}
+        <a class="btn btn-primary no-print" href="/registros" title="Os grupos são criados e preenchidos na Digitação RAAS">⚡ Digitação RAAS</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span>Grupos de {{ sel_month }}</span>
+        <span class="badge badge-blue">{{ grupos | length }} grupo(s) · {{ total_pacientes }} paciente(s) · {{ total_registros }} atendimento(s)</span>
+    </div>
+
+    {% if grupos %}
+    <div class="grupos-barra no-print">
+        <span class="reg-busca gr-busca">
+            <span class="reg-busca-lupa" aria-hidden="true">🔎</span>
+            <input type="text" id="grupoBusca" autocomplete="off" oninput="filtrarGrupos()"
+                   placeholder="Buscar por descrição, data (18/11), nome ou nº do prontuário..."
+                   title="Também encontra pelo procedimento, pelo profissional e pelo número do grupo">
+            <button type="button" class="reg-busca-x" id="grupoBuscaX" onclick="limparBuscaGrupos()"
+                    title="Limpar a busca" aria-label="Limpar a busca" hidden>✕</button>
+        </span>
+        {#- Um seletor de modo (duas opções, uma sempre marcada) em vez de um
+            botão que troca de rótulo: assim dá para ver como a tela está. -#}
+        <div class="gr-modo" role="group" aria-label="O que mostrar dentro de cada grupo">
+            <span class="gr-modo-rot">Mostrar:</span>
+            <button type="button" data-modo="pacientes" onclick="definirModo('pacientes')">Só pacientes</button>
+            <button type="button" data-modo="tudo" class="ativo" onclick="definirModo('tudo')">Pacientes e atendimentos</button>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="abrirTodosGrupos(true)">Abrir todos os grupos</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="abrirTodosGrupos(false)">Fechar todos</button>
+    </div>
+    <div class="gr-legenda" title="Mesmo padrão de cores da lista de Registros RAAS">
+        <span>Cores dos atendimentos de cada paciente:</span>
+        <span><i style="background:#e0efff"></i><i style="background:#fff8d6"></i>azul claro e amarelo claro se alternam a cada bloco de 2 ou mais atendimentos seguidos do mesmo profissional ou do mesmo procedimento</span>
+    </div>
+    <div id="grupoSemResultado" class="grupos-vazio no-print" style="display:none;">
+        <div style="font-size:32px;margin-bottom:10px;">🔎</div>
+        <div>Nenhum grupo encontrado para essa busca</div>
+    </div>
+
+    <div class="grupos-lista" id="grupoLista">
+        {% for g in grupos %}
+        {%- set data_br = g.group_date[8:10] ~ '/' ~ g.group_date[5:7] ~ '/' ~ g.group_date[:4] -%}
+        {#- Tudo o que o filtro procura por texto, já em minúsculas. -#}
+        {%- set busca -%}
+            grupo nº {{ g.numero }} · grupo {{ g.numero }} · {{ g.description }}
+            · {{ data_br }} · {{ g.group_date }} · {{ g.group_time }}
+            {%- for p in g.pacientes %} · {{ p.patient_name }} {{ p.patient_prontuario or '' }}
+                {%- for r in p.registros %} {{ r.procedure_name }} {{ r.procedure_code or '' }} {{ r.professional_name }}{% endfor %}
+            {%- endfor %}
+        {%- endset %}
+        {#- Os mesmos dados só em dígitos: assim "1811", "18/11" e "18-11-2026"
+            acham a mesma data, e o prontuário é encontrado digitando só o número. -#}
+        {%- set numeros -%}
+            {{ data_br | replace('/', '') }} {{ g.group_date | replace('-', '') }} {{ g.group_time | replace(':', '') }}
+            {%- for p in g.pacientes %} {{ p.patient_prontuario or '' }}{% endfor %}
+        {%- endset %}
+        <section class="gr-card" data-busca="{{ busca | lower }}" data-num="{{ numeros | trim }}">
+            {#- A barra inteira abre e fecha o grupo; a seta mostra em que estado ele está. -#}
+            <header class="gr-cab" data-acao="grupo" role="button" tabindex="0" aria-expanded="true"
+                    title="Clique para fechar ou abrir este grupo">
+                <span class="gr-seta" aria-hidden="true"></span>
+                <h2>Grupo nº {{ g.numero }} – {{ g.description }} - Data
+                    {{ g.group_date[8:10] }}/{{ g.group_date[5:7] }}/{{ g.group_date[:4] }} – {{ g.group_time }} hrs</h2>
+                <span class="gr-vagas{% if g.pacientes | length >= g.people_count %} cheio{% endif %}"
+                      title="Pacientes lançados / quantidade de pessoas do grupo">{{ g.pacientes | length }}/{{ g.people_count }}</span>
+                <span class="gr-regs">{{ g.total_registros }} atend.</span>
+                {% if user.role in ['admin', 'operador'] %}
+                <a class="btn btn-primary btn-sm gr-mais no-print" href="/registros?month={{ sel_month }}&lote_grupo={{ g.id }}"
+                   title="Abre a Digitação RAAS neste grupo, já com os pacientes dele, para lançar mais procedimentos ou profissionais">＋ Novos lançamentos</a>
+                {% endif %}
+            </header>
+            <div class="gr-corpo">
+                {% if g.pacientes %}
+                {% for p in g.pacientes %}
+                {#- Cada paciente abre e fecha os próprios atendimentos. -#}
+                <div class="gr-pac">
+                    <div class="gr-pac-nome" data-acao="paciente" role="button" tabindex="0" aria-expanded="true"
+                         title="Clique para ver ou esconder os atendimentos deste paciente">
+                        <span class="gr-seta gr-seta-pac" aria-hidden="true"></span>
+                        <span class="gr-pac-txt">{{ loop.index }}) {{ p.patient_name }}{% if p.patient_prontuario %} <span class="gr-pront">– pront: {{ p.patient_prontuario }}</span>{% endif %}</span>
+                        <span class="gr-pac-qtd">{{ p.registros | length }} atend.</span>
+                    </div>
+                    <ul class="gr-procs">
+                        {% for r in p.registros %}
+                        <li{% if r.cor_linha %} class="{{ r.cor_linha }}"{% endif %}>
+                            <span class="gr-check" aria-hidden="true">✓</span>
+                            <span class="gr-proc" title="{{ r.procedure_code or '' }} {{ r.procedure_name }}">{{ r.procedure_name }}{% if r.quantity > 1 %} <b>{{ r.quantity }}x</b>{% endif %}</span>
+                            <span class="gr-prof" title="{{ r.professional_name }}">{{ r.professional_name }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="gr-vazio">Nenhum atendimento lançado neste grupo ainda.</div>
+                {% endif %}
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+
+    {% if sessoes_por_profissional %}
+    <div class="gr-sessoes">
+        <strong>Sessões por profissional na competência {{ info("Cada grupo em que o profissional lançou pelo menos um atendimento conta uma sessão. É o mesmo número da coluna Sessões (grupos) nos Indicadores.") }}</strong>
+        <div class="gr-sessoes-lista">
+            {% for nome, total in sessoes_por_profissional %}
+            <span class="gr-sessao-chip">{{ nome }} <b>{{ total }}</b></span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="grupos-vazio">
+        <div style="font-size:40px;margin-bottom:12px;">👥</div>
+        <div style="font-weight:500;">Nenhum grupo nesta competência</div>
+        <div style="font-size:13px;margin-top:4px;">
+            Os grupos são criados em <strong>Registros RAAS → ⚡ Digitação RAAS → 👥 Lançar grupo</strong>.
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function trocarMesGrupos() {
+    window.location.href = '/grupos?month=' + document.getElementById('monthPicker').value;
+}
+
+/* Dois níveis, cada um com a sua seta:
+   · a barra do grupo abre e fecha o grupo    → .gr-card.fechado
+   · o nome do paciente abre e fecha os atendimentos dele → .gr-pac.fechado
+   O seletor "Mostrar" no alto vale para todos os pacientes de uma vez. */
+const CHAVE_MODO = 'grupos.modo';
+
+function definirModo(modo, guardar = true) {
+    document.querySelectorAll('.gr-pac').forEach((pac) => marcar(pac, modo === 'pacientes'));
+    document.querySelectorAll('.gr-modo button').forEach((b) => b.classList.toggle('ativo', b.dataset.modo === modo));
+    if (guardar) {
+        try { localStorage.setItem(CHAVE_MODO, modo); } catch (e) { /* ignore */ }
+    }
+}
+
+/* Fecha ou abre um bloco e deixa a seta e o leitor de tela de acordo. */
+function marcar(el, fechado) {
+    el.classList.toggle('fechado', fechado);
+    const comando = el.classList.contains('gr-card') ? el.querySelector('.gr-cab') : el.querySelector('.gr-pac-nome');
+    comando?.setAttribute('aria-expanded', fechado ? 'false' : 'true');
+}
+
+/* O seletor "Mostrar" deixa de valer para um grupo em que o usuário mexeu à
+   mão: marcado quando todos os pacientes estão no mesmo estado. */
+function conferirModo() {
+    const pacs = Array.from(document.querySelectorAll('.gr-pac'));
+    if (!pacs.length) return;
+    const fechados = pacs.filter((p) => p.classList.contains('fechado')).length;
+    const modo = fechados === pacs.length ? 'pacientes' : (fechados === 0 ? 'tudo' : null);
+    document.querySelectorAll('.gr-modo button').forEach((b) => b.classList.toggle('ativo', b.dataset.modo === modo));
+}
+
+function alternar(el) {
+    marcar(el, !el.classList.contains('fechado'));
+    conferirModo();
+}
+
+const comandoDe = (alvo) => (alvo.dataset.acao === 'paciente' ? alvo.closest('.gr-pac') : alvo.closest('.gr-card'));
+
+document.getElementById('grupoLista')?.addEventListener('click', (e) => {
+    if (e.target.closest('a')) return; // o botão "Novos lançamentos" não abre/fecha o grupo
+    const alvo = e.target.closest('[data-acao]');
+    if (alvo) alternar(comandoDe(alvo));
+});
+
+/* Teclado: a barra e o nome do paciente são botões para quem navega por Tab. */
+document.getElementById('grupoLista')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.target.closest('a')) return;
+    const alvo = e.target.closest('[data-acao]');
+    if (!alvo) return;
+    e.preventDefault();
+    alternar(comandoDe(alvo));
+});
+
+function abrirTodosGrupos(abrir) {
+    document.querySelectorAll('.gr-card').forEach((card) => marcar(card, !abrir));
+}
+
+/* Busca por descrição, data, nome ou nº do prontuário (e também por
+   procedimento, profissional e número do grupo). Os acentos são ignorados e,
+   quando o que foi digitado tem números, eles são comparados também sem a
+   pontuação: assim `18/11`, `1811` e `18-11-2026` acham a mesma data. */
+const semAcento = (t) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const soDigitos = (t) => (t || '').replace(/\D/g, '');
+
+function grupoCasa(card, texto, digitos) {
+    if (semAcento(card.dataset.busca).includes(texto)) return true;
+    if (digitos.length < 2) return false;
+    return (card.dataset.num || '').split(/\s+/).some((n) => n.includes(digitos));
+}
+
+function filtrarGrupos() {
+    const termo = document.getElementById('grupoBusca').value || '';
+    const texto = semAcento(termo).trim();
+    const digitos = soDigitos(termo);
+    document.getElementById('grupoBuscaX').hidden = !termo;
+
+    let visiveis = 0;
+    document.querySelectorAll('.gr-card').forEach((card) => {
+        const casa = !texto || grupoCasa(card, texto, digitos);
+        card.style.display = casa ? '' : 'none';
+        if (casa) visiveis++;
+    });
+    document.getElementById('grupoSemResultado').style.display = visiveis ? 'none' : 'block';
+}
+
+function limparBuscaGrupos() {
+    const campo = document.getElementById('grupoBusca');
+    campo.value = '';
+    filtrarGrupos();
+    campo.focus();
+}
+
+/* A tela abre no modo escolhido da última vez. */
+(function () {
+    let modo = 'tudo';
+    try {
+        modo = localStorage.getItem(CHAVE_MODO) || 'tudo';
+    } catch (e) {
+        modo = 'tudo';
+    }
+    if (modo === 'pacientes') definirModo('pacientes', false);
+})();
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.grupos-barra { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+.gr-busca { flex: 1 1 440px; min-width: 300px; max-width: 620px; }
+.gr-busca input { padding-right: 34px; }
+.reg-busca-x {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 22px; height: 22px; border: none; border-radius: 6px;
+    background: transparent; color: #94a3b8; font-size: 12px; line-height: 1; cursor: pointer;
+}
+.reg-busca-x:hover { background: var(--muted-bg); color: #334155; }
+.grupos-vazio { text-align: center; padding: 50px 20px; color: var(--muted); }
+.grupos-lista { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Seletor de modo: a opção em vigor fica marcada, então a tela mostra o
+   estado em que está em vez de um botão que troca de rótulo. */
+.gr-modo { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--border); border-radius: 8px; background: #fff; overflow: hidden; }
+.gr-modo-rot { font-size: 12px; color: var(--muted); padding: 0 10px; }
+.gr-modo button { border: none; border-left: 1px solid var(--border); background: #fff; color: #334155; font: 600 12.5px/1 'Segoe UI', system-ui, sans-serif; padding: 8px 12px; cursor: pointer; }
+.gr-modo button:hover { background: var(--muted-bg); }
+.gr-modo button.ativo { background: var(--primary); color: #fff; }
+
+/* Cada grupo na disposição da relação impressa. */
+.gr-card { border: 1px solid #cbd5e1; border-left: 4px solid #94a3b8; border-radius: 8px; background: #fff; overflow: hidden; }
+.gr-cab { display: flex; align-items: center; gap: 9px; padding: 7px 12px; background: #e9eef5; cursor: pointer; user-select: none; }
+.gr-cab:hover { background: #dde5ef; }
+.gr-cab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.gr-cab h2 { font-size: 14px; font-weight: 700; color: #166534; letter-spacing: .01em; }
+.gr-vagas { margin-left: auto; flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: #065f46; background: #d1fae5; border-radius: 10px; padding: 1px 9px; }
+.gr-vagas.cheio { color: #7c2d12; background: #fed7aa; }
+.gr-mais { flex-shrink: 0; padding: 3px 10px; font-size: 12px; }
+.gr-regs { flex-shrink: 0; font-size: 11.5px; font-weight: 600; color: #1e3a8a; background: #e0e7ff; border-radius: 10px; padding: 1px 9px; }
+
+/* A seta é desenhada em CSS (nenhuma fonte precisa ter o símbolo): apontando
+   para baixo o bloco está aberto, para a direita está fechado. */
+.gr-seta {
+    flex-shrink: 0; width: 0; height: 0;
+    border-left: 5.5px solid transparent; border-right: 5.5px solid transparent; border-top: 7px solid #166534;
+    transition: transform .15s ease;
+}
+.gr-card.fechado > .gr-cab .gr-seta { transform: rotate(-90deg); }
+.gr-seta-pac { border-top-color: #64748b; border-left-width: 4.5px; border-right-width: 4.5px; border-top-width: 6px; }
+.gr-pac.fechado .gr-seta-pac { transform: rotate(-90deg); }
+
+.gr-card.fechado .gr-corpo { display: none; }
+.gr-corpo { padding: 6px 0 8px; }
+.gr-vazio { padding: 10px 16px; font-size: 13px; color: var(--muted); font-style: italic; }
+.gr-pac { padding: 3px 16px; }
+.gr-pac + .gr-pac { border-top: 1px dashed #e2e8f0; }
+.gr-pac-nome { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: 6px; font-size: 13.5px; font-weight: 700; color: #0f172a; cursor: pointer; user-select: none; }
+.gr-pac-nome:hover { background: #f1f5f9; }
+.gr-pac-nome:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.gr-pac-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gr-pront { font-weight: 600; color: #64748b; }
+.gr-pac-qtd { margin-left: auto; flex-shrink: 0; font-size: 11px; font-weight: 600; color: var(--muted); }
+.gr-pac.fechado .gr-procs { display: none; }
+.gr-procs { list-style: none; margin: 1px 0 4px; padding-left: 37px; }
+.gr-procs li { display: grid; grid-template-columns: 14px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; font-size: 12.5px; line-height: 1.6; }
+/* Mesmos blocos da lista de Registros RAAS, mas em azul claro e amarelo claro
+   alternados (mais leve de ler numa lista longa). */
+.gr-procs li { padding: 0 8px; border-radius: 4px; }
+.gr-procs li + li { margin-top: 1px; }
+.gr-procs li.reg-bloco-amarelo, .gr-procs li.reg-proc-rosa { background: #e0efff; }
+.gr-procs li.reg-bloco-azul, .gr-procs li.reg-proc-vermelho { background: #fff8d6; }
+.gr-legenda { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 0 20px 10px; font-size: 12px; color: var(--muted); }
+.gr-legenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; border: 1px solid rgba(0,0,0,.08); }
+.gr-check { color: #059669; font-weight: 700; }
+.gr-proc, .gr-prof { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+.gr-proc { color: #1f2937; }
+.gr-proc b { color: #047857; }
+.gr-prof { color: #475569; }
+
+.gr-sessoes { padding: 14px 20px; border-top: 1px solid var(--border); background: var(--muted-bg); font-size: 13px; }
+.gr-sessoes-lista { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.gr-sessao-chip { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 12px; color: #334155; }
+.gr-sessao-chip b { color: var(--primary); margin-left: 4px; }
+
+@media (max-width: 760px) {
+    .gr-procs li { grid-template-columns: 14px minmax(0, 1fr); }
+    .gr-prof { grid-column: 2; color: #334155; font-size: 11.5px; }
+}
+
+@media print {
+    @page { size: A4 portrait; margin: 12mm; }
+    .card, .gr-card { border: 1px solid #999; box-shadow: none; }
+    .card-header { border-bottom: 1px solid #999; }
+    .grupos-lista { padding: 0; gap: 10px; }
+    .gr-card { break-inside: avoid; }
+    /* A impressão sai completa, qualquer que seja o que está fechado na tela. */
+    .gr-card.fechado .gr-corpo, .gr-pac.fechado .gr-procs { display: block; }
+    .gr-seta, .gr-pac-qtd { display: none; }
+    .gr-cab, .gr-vagas, .gr-regs, .gr-procs li, .gr-legenda i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+{% endblock %}

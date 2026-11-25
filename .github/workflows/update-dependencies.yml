@@ -1,0 +1,51 @@
+name: Alert dependency updates
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Check outdated dependencies
+        run: |
+          pip list --outdated --format=json > outdated.json
+          python - <<'PY' > outdated.md
+          import json
+          for p in json.load(open("outdated.json")):
+              print(f"- **{p['name']}**: {p['version']} → {p['latest_version']}")
+          PY
+
+      - name: Create, update or close issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          title="Alert: dependências desatualizadas"
+          existing=$(gh issue list --repo "$REPO" --label dependencies --state open --search "$title in:title" --json number --jq '.[0].number')
+          if [ ! -s outdated.md ]; then
+            [ -n "$existing" ] && gh issue close "$existing" --repo "$REPO" --comment "Todas as dependências estão atualizadas."
+            exit 0
+          fi
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$REPO" --body-file outdated.md
+          else
+            gh issue create --repo "$REPO" --title "$title" --body-file outdated.md --label dependencies
+          fi

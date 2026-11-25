@@ -1,0 +1,102 @@
+{% macro cabecalho(icone, titulo, descricao) %}
+<div class="page-header no-print">
+    <div>
+        <h1>{{ icone }} {{ titulo }}</h1>
+        <p>{{ descricao }}</p>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro botao_imprimir(acao) %}
+<button type="submit" class="btn btn-primary" formaction="{{ acao }}" formmethod="get" formnovalidate onclick="this.form.target = this.form.elements.formato.value === 'pdf' ? '_blank' : '_self';">
+    🖨️ Imprimir
+</button>
+{% endmacro %}
+
+{% macro seletor_formato() %}
+<div class="rimp-formato">
+    <label for="formatoRelatorio">Formato</label>
+    <select id="formatoRelatorio" name="formato">
+        <option value="pdf" selected>PDF</option>
+        <option value="csv">CSV</option>
+        <option value="txt">TXT</option>
+    </select>
+</div>
+{% endmacro %}
+
+{% macro celula(c, col) -%}
+{%- if c is mapping and c.barra is defined -%}
+<td class="rimp-pct"><span class="rimp-barra" style="width:{{ [c.barra, 100] | min }}%"></span><span class="rimp-pct-num">{{ c.v }}</span></td>
+{%- elif c is mapping -%}
+<td{% if col.centro %} class="c"{% endif %} style="{% if c.cor %}color:#{{ c.cor }};{% endif %}{% if c.b %}font-weight:700;{% endif %}">{{ c.v }}</td>
+{%- else -%}
+<td{% if col.centro %} class="c"{% elif col.chave == 'nome' %} class="rimp-col-nome"{% endif %}>{{ c }}</td>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro filtros_pacientes(f, opcoes) %}
+{% set avancados = f.sexo or f.etnia or f.bairro or f.cid or f.idade_min or f.idade_max or f.admissao_de or f.admissao_ate %}
+<div class="rimp-filtros">
+    <div class="form-group"><label>Buscar</label>
+        <input type="text" name="busca" value="{{ f.busca }}" placeholder="Nome, CNS, CPF ou prontuário">
+    </div>
+    <div class="form-group"><label>Médico Psiquiatra</label>
+        <select name="medico">
+            <option value="">Todos</option>
+            {% for m in opcoes.medicos %}<option value="{{ m }}" {% if m == f.medico %}selected{% endif %}>{{ m }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="form-group"><label>Técnico de Referência</label>
+        <input type="text" name="tecnico" value="{{ f.tecnico }}" placeholder="Nome do técnico">
+    </div>
+    <div class="form-group"><label>Situação</label>
+        <select name="situacao">
+            <option value="">Todas</option>
+            {% for valor, rotulo in opcoes.situacoes.items() %}<option value="{{ valor }}" {% if valor == f.situacao %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+            <option value="sem" {% if f.situacao == 'sem' %}selected{% endif %}>Sem situação</option>
+        </select>
+    </div>
+    <div class="form-group"><label>Ordenar por</label>
+        <select name="ordenar">
+            {% for valor, rotulo in opcoes.ordenacoes.items() %}<option value="{{ valor }}" {% if valor == f.ordenar or (not f.ordenar and valor == 'nome') %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+        </select>
+    </div>
+</div>
+
+<details class="rimp-secao" {% if avancados %}open{% endif %}>
+    <summary>🔎 Mais filtros{% if avancados %} <span class="rimp-badge">ativos</span>{% endif %}</summary>
+    <div class="rimp-filtros rimp-filtros-mais">
+        <div class="form-group"><label>Sexo</label>
+            <select name="sexo">
+                <option value="">Todos</option>
+                {% for valor, rotulo in opcoes.sexos.items() %}<option value="{{ valor }}" {% if valor == f.sexo %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Etnia</label>
+            <select name="etnia">
+                <option value="">Todas</option>
+                {% for valor, rotulo in opcoes.etnias.items() %}<option value="{{ valor }}" {% if valor == f.etnia %}selected{% endif %}>{{ rotulo | title }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Bairro</label>
+            <input type="text" name="bairro" value="{{ f.bairro }}" list="rimpBairros" placeholder="Parte do nome">
+            <datalist id="rimpBairros"><option value="">{% for b in opcoes.bairros %}<option value="{{ b }}">{% endfor %}</datalist>
+        </div>
+        <div class="form-group"><label>CID começa com</label>
+            <input type="text" name="cid" value="{{ f.cid }}" placeholder="Ex: F84, F90" maxlength="10">
+        </div>
+        <div class="form-group"><label>Idade (anos)</label>
+            <div class="rimp-faixa">
+                <input type="number" name="idade_min" value="{{ f.idade_min }}" min="0" max="120" placeholder="de">
+                <input type="number" name="idade_max" value="{{ f.idade_max }}" min="0" max="120" placeholder="até">
+            </div>
+        </div>
+        <div class="form-group"><label>Data de admissão</label>
+            <div class="rimp-faixa">
+                <input type="date" name="admissao_de" value="{{ f.admissao_de }}" title="De">
+                <input type="date" name="admissao_ate" value="{{ f.admissao_ate }}" title="Até">
+            </div>
+        </div>
+    </div>
+</details>
+{% endmacro %}

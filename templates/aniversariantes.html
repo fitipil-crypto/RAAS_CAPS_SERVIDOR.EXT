@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Aniversariantes — RAAS-CAPS{% endblock %}
+{% block page_title %}Aniversariantes{% endblock %}
+
+{% macro qs(m=None, t=None, i=None) -%}
+?mes={{ m or mes }}&tipo={{ t or tipo }}{% if (i if i is not none else inativos) %}&inativos=true{% endif %}
+{%- endmacro %}
+
+{% macro cartao(a, mostrar_dias=False) %}
+<div class="aniv-item aniv-{{ a.tipo }}{% if a.hoje %} aniv-hoje{% endif %}" data-search="{{ a.nome | lower }} {{ a.detalhe | lower }}">
+    <div class="aniv-avatar aniv-avatar-{{ a.tipo }}">{{ a.iniciais }}{% if a.hoje %}<span class="aniv-cake">🎂</span>{% endif %}</div>
+    <div class="aniv-info">
+        <a class="aniv-nome" href="{{ a.link }}">{{ a.nome }}</a>
+        <div class="aniv-meta">
+            <span class="badge badge-{{ 'purple' if a.tipo == 'paciente' else 'blue' }}">{{ 'Paciente' if a.tipo == 'paciente' else 'Profissional' }}</span>
+            <span>{{ a.detalhe }}</span>
+            {% if not a.ativo %}<span class="badge badge-gray">Inativo</span>{% endif %}
+        </div>
+        {% if a.telefone %}<div class="aniv-tel">📞 {{ a.telefone }}</div>{% endif %}
+    </div>
+    <div class="aniv-idade">
+        <strong>{{ a.idade }}</strong>
+        <span>anos</span>
+        {% if mostrar_dias %}
+        <small>{{ 'amanhã' if a.dias_restantes == 1 else 'em ' ~ a.dias_restantes ~ ' dias' }} · {{ '%02d/%02d' | format(a.dia, a.mes) }}</small>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header aniv-topo">
+    <div>
+        <h1><span class="aniv-bolo">🎂</span> Aniversariantes</h1>
+        <p>Pacientes e profissionais da instituição que fazem aniversário</p>
+    </div>
+    <div style="display:flex; gap:10px;">
+        <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir lista</button>
+    </div>
+</div>
+
+{# ── Destaque de hoje ── #}
+<div class="aniv-hero {{ 'aniv-hero-vazio' if not resumo.hoje }}">
+    <div class="aniv-confete" aria-hidden="true">
+        <span class="aniv-confete-emojis">🥳</span>
+        <span class="aniv-mascote"></span>
+        <span class="aniv-confete-emojis">🎈 🎉 🎁 🎊 🎈 🎉</span>
+    </div>
+    {% if resumo.hoje %}
+    <h2>🎉 Parabéns! Hoje é dia de festa — {{ hoje.strftime('%d/%m/%Y') }}</h2>
+    <div class="aniv-hero-lista">
+        {% for a in resumo.hoje %}
+        <div class="aniv-hero-card">
+            <div class="aniv-avatar aniv-avatar-lg aniv-avatar-{{ a.tipo }}">{{ a.iniciais }}<span class="aniv-cake">🎂</span></div>
+            <div>
+                <div class="aniv-hero-nome">{{ a.nome }}</div>
+                <div class="aniv-hero-sub">completa <strong>{{ a.idade }} anos</strong> · {{ 'Paciente' if a.tipo == 'paciente' else 'Profissional' }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <h2>Nenhum aniversariante hoje</h2>
+    {% if resumo.proximos %}
+    <p>O próximo é <strong>{{ resumo.proximos[0].nome }}</strong>, {{ 'amanhã' if resumo.proximos[0].dias_restantes == 1 else 'em ' ~ resumo.proximos[0].dias_restantes ~ ' dias' }} ({{ '%02d/%02d' | format(resumo.proximos[0].dia, resumo.proximos[0].mes) }}).</p>
+    {% else %}
+    <p>Nada previsto para os próximos 7 dias.</p>
+    {% endif %}
+    {% endif %}
+</div>
+
+{#- aniv-stats: cartões de contagem mais baixos, só nesta tela (stats-grid
+    também é usado no painel e no backup). -#}
+<div class="stats-grid aniv-stats">
+    <div class="stat-card stat-primary"><div class="stat-icon">🎂</div><div class="stat-value">{{ resumo.total_mes }}</div><div class="stat-label">Em {{ mes_nome }}</div></div>
+    <div class="stat-card stat-accent"><div class="stat-icon">👥</div><div class="stat-value">{{ resumo.pacientes_mes }}</div><div class="stat-label">Pacientes</div></div>
+    <div class="stat-card stat-secondary"><div class="stat-icon">👨‍⚕️</div><div class="stat-value">{{ resumo.profissionais_mes }}</div><div class="stat-label">Profissionais</div></div>
+    <div class="stat-card stat-warning"><div class="stat-icon">⏳</div><div class="stat-value">{{ resumo.hoje | length + resumo.proximos | length }}</div><div class="stat-label">Hoje + próximos 7 dias</div></div>
+</div>
+
+{# ── Filtros ── #}
+<div class="card aniv-filtros no-print">
+    <div class="card-body">
+        <div class="aniv-mes-nav">
+            <a class="btn btn-outline btn-sm" href="/aniversariantes{{ qs(mes_anterior) }}" aria-label="Mês anterior">‹</a>
+            <div class="aniv-mes-titulo">{{ mes_nome }}</div>
+            <a class="btn btn-outline btn-sm" href="/aniversariantes{{ qs(mes_seguinte) }}" aria-label="Próximo mês">›</a>
+            {% if mes != hoje.month %}<a class="btn btn-ghost btn-sm" href="/aniversariantes?tipo={{ tipo }}{% if inativos %}&inativos=true{% endif %}">Mês atual</a>{% endif %}
+        </div>
+        <div class="aniv-chips">
+            <a class="aniv-chip {{ 'ativo' if tipo == 'todos' }}" href="/aniversariantes{{ qs(t='todos') }}">Todos</a>
+            <a class="aniv-chip {{ 'ativo' if tipo == 'paciente' }}" href="/aniversariantes{{ qs(t='paciente') }}">👥 Pacientes</a>
+            <a class="aniv-chip {{ 'ativo' if tipo == 'profissional' }}" href="/aniversariantes{{ qs(t='profissional') }}">👨‍⚕️ Profissionais</a>
+            <a class="aniv-chip {{ 'ativo' if inativos }}" href="/aniversariantes{{ qs(i=(not inativos)) }}">{{ '☑' if inativos else '☐' }} Incluir inativos</a>
+        </div>
+        <input type="text" id="searchInput" class="search-input search-busca" placeholder="Buscar por nome neste mês..." oninput="filtrarAniversariantes()">
+    </div>
+</div>
+
+<div class="aniv-layout">
+    {# ── Linha do tempo do mês ── #}
+    <div class="card">
+        <div class="card-header">
+            <span>Aniversariantes de {{ mes_nome }}</span>
+            <span class="badge badge-blue">{{ resumo.total_mes }}</span>
+        </div>
+        <div class="aniv-timeline" id="timeline">
+            {% for dia, itens in dias %}
+            <div class="aniv-dia{% if mes == hoje.month and dia == hoje.day %} aniv-dia-hoje{% endif %}">
+                <div class="aniv-dia-data">
+                    <strong>{{ '%02d' | format(dia) }}</strong>
+                    <span>{{ itens[0].dia_semana[:3] }}</span>
+                </div>
+                <div class="aniv-dia-itens">
+                    {% for a in itens %}{{ cartao(a) }}{% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="aniv-vazio">
+                <div style="font-size:42px">🎈</div>
+                <p>Nenhum aniversariante em {{ mes_nome }}.</p>
+                <small>Só aparecem pessoas com data de nascimento cadastrada.</small>
+            </div>
+            {% endfor %}
+            <div class="aniv-vazio" id="semResultado" style="display:none">Nenhum resultado para a busca.</div>
+        </div>
+    </div>
+
+    <div class="aniv-lateral no-print">
+        <div class="card">
+            <div class="card-header"><span>⏳ Próximos 7 dias</span></div>
+            <div class="aniv-proximos">
+                {% for a in resumo.proximos %}{{ cartao(a, True) }}
+                {% else %}<div class="aniv-vazio"><small>Ninguém nos próximos 7 dias.</small></div>{% endfor %}
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><span>📊 Aniversários por mês</span></div>
+            <div class="aniv-barras">
+                {% for n in resumo.por_mes %}
+                <a class="aniv-barra {{ 'atual' if loop.index == mes }}" href="/aniversariantes{{ qs(loop.index) }}" title="{{ meses[loop.index0] }}: {{ n }}">
+                    <span class="aniv-barra-n">{{ n }}</span>
+                    <span class="aniv-barra-fill" style="height:{{ (n / max_mes * 66) | round | int }}px"></span>
+                    <span class="aniv-barra-mes">{{ meses[loop.index0][:3] }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/aniversariantes.js"></script>
+{% endblock %}

@@ -1,0 +1,10 @@
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      SECRET_KEY: "test-secret-key"
+      DEBUG: "true"
+      RAAS_DESATIVAR_PRIMEIRO_ACESSO: "1"
+    command: python -m pytest tests/ -v --tb=short

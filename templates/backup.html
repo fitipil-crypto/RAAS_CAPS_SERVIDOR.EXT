@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+{% from "_ajuda.html" import info with context %}
+{% block title %}Backup — RAAS-CAPS{% endblock %}
+{% block page_title %}Backup{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💾 Backup</h1>
+    <p>Backup e restauração de dados</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card stat-primary"><div class="stat-icon">👥</div><div class="stat-value">{{ stats.pacientes }}</div><div class="stat-label">Pacientes</div></div>
+    <div class="stat-card stat-secondary"><div class="stat-icon">👨‍⚕️</div><div class="stat-value">{{ stats.profissionais }}</div><div class="stat-label">Profissionais</div></div>
+    <div class="stat-card stat-accent"><div class="stat-icon">📋</div><div class="stat-value">{{ stats.procedimentos }}</div><div class="stat-label">Procedimentos</div></div>
+    <div class="stat-card stat-warning"><div class="stat-icon">📝</div><div class="stat-value">{{ stats.registros }}</div><div class="stat-label">Registros RAAS</div></div>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding:28px;">
+        <h2>Gerar Backup</h2>
+        <p style="color:var(--muted);">Exporta todos os dados em um arquivo <code>.json</code>.</p>
+        <div style="background:var(--secondary-light);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#065f46;">
+            ✓ Inclui: {{ stats.pacientes }} pacientes · {{ stats.profissionais }} profissionais · {{ stats.procedimentos }} procedimentos · {{ stats.registros }} registros RAAS · configurações
+        </div>
+        <button class="btn btn-secondary btn-lg" id="btnBackup" onclick="downloadBackup()">⬇️ Baixar Backup Agora</button>
+        <div class="progress-wrap" id="downloadProgress" hidden>
+            <div class="progress-info">
+                <span id="downloadLabel">Gerando backup…</span>
+                <strong id="downloadPct">0%</strong>
+            </div>
+            <div class="progress-track" id="downloadTrack"><div class="progress-fill" id="downloadFill"></div></div>
+        </div>
+    </div>
+</div>
+
+{% if user.role == 'admin' %}
+<div class="card">
+    <div class="card-body" style="padding:28px;">
+        <h2>Restaurar Backup</h2>
+        <p style="color:var(--muted);">Carregue um arquivo <code>.json</code> para restaurar os dados.</p>
+        <div style="background:var(--warning-light);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;">
+            ⚠️ Atenção: a restauração substitui todos os dados atuais.
+        </div>
+        <input type="file" id="restoreInput" accept=".json" style="display:none;" onchange="handleRestore(event)">
+        <button class="btn btn-outline btn-lg" id="btnRestore" onclick="document.getElementById('restoreInput').click()">📁 Selecionar Arquivo de Backup</button>
+        <div class="progress-wrap" id="uploadProgress" hidden>
+            <div class="progress-info">
+                <span id="uploadLabel">Enviando arquivo…</span>
+                <strong id="uploadPct">0%</strong>
+            </div>
+            <div class="progress-track" id="uploadTrack"><div class="progress-fill" id="uploadFill"></div></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if user.role == 'admin' %}
+<div class="card" id="backupAutoCard">
+    <div class="card-body" style="padding:28px;">
+        <div class="bka-topo">
+            <div>
+                <h2>Backup automático</h2>
+                <p style="color:var(--muted);">Salva todo o sistema, sozinho, em uma pasta de outro computador da rede local, nos dias e horários escolhidos.</p>
+            </div>
+            <label class="bka-switch" title="Ligar/desligar o backup automático">
+                <input type="checkbox" id="bkaAtivo"><span class="bka-slider"></span><strong id="bkaAtivoTxt">Desligado</strong>
+            </label>
+        </div>
+
+        <div id="bkaStatus" class="bka-status"></div>
+
+        <div class="form-group">
+            <label>Pasta de destino na rede {{ info("Pasta compartilhada em outro computador. Use o nome do computador (\\\\RECEPCAO\\Backups) ou o IP (\\\\192.168.0.10\\Backups). O backup é um .zip com a cópia completa do banco e o arquivo .json de restauração.") }}</label>
+            <div class="bka-destino">
+                <input type="text" id="bkaDestino" placeholder="\\COMPUTADOR\Pasta  ou  \\192.168.0.10\Pasta" autocomplete="off" spellcheck="false">
+                <button type="button" class="btn btn-outline" onclick="bkaProcurar()">🔍 Procurar na rede</button>
+                <button type="button" class="btn btn-outline" onclick="bkaTestar()">✔️ Testar</button>
+            </div>
+            <details class="bka-cred">
+                <summary>🔑 A pasta pede usuário e senha?</summary>
+                <p>Informe a conta do computador de destino. Ela fica guardada no <strong>Gerenciador de Credenciais do Windows</strong> deste servidor, não no RAAS-CAPS.</p>
+                <div class="bka-cred-campos">
+                    <input type="text" id="bkaUsuario" placeholder="Usuário (ex.: RECEPCAO\backup)" autocomplete="off">
+                    <input type="password" id="bkaSenha" placeholder="Senha" autocomplete="new-password">
+                    <button type="button" class="btn btn-outline" onclick="bkaConectar()">Conectar</button>
+                </div>
+            </details>
+        </div>
+
+        <div class="bka-grade">
+            <div class="form-group">
+                <label>Dias da semana</label>
+                <div class="bka-dias" id="bkaDias">
+                    {% for d in ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'] %}
+                    <label class="bka-dia"><input type="checkbox" value="{{ loop.index0 }}"><span>{{ d }}</span></label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Horários {{ info("Até 6 horários por dia. Se o computador estiver ocupado ou acabando de ligar, o backup ainda é feito em até 10 minutos depois do horário.") }}</label>
+                <div class="bka-horarios" id="bkaHorarios"></div>
+                <button type="button" class="btn btn-ghost btn-sm" id="bkaAddHora" onclick="bkaAddHorario('')">＋ horário</button>
+            </div>
+            <div class="form-group">
+                <label>Guardar os últimos {{ info("Quando passar desse número, os backups mais antigos da pasta são apagados.") }}</label>
+                <div class="bka-manter"><input type="number" id="bkaManter" min="1" max="365" value="30"> backups</div>
+            </div>
+        </div>
+
+        <div class="bka-acoes">
+            <button type="button" class="btn btn-primary" id="bkaSalvar" onclick="bkaSalvar()">💾 Salvar configuração</button>
+            <button type="button" class="btn btn-secondary" id="bkaAgora" onclick="bkaExecutar()">▶️ Fazer backup agora</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="bkaRedeModal" style="display:none;">
+    <div class="modal" style="max-width:560px;">
+        <div class="modal-header">
+            <h2 id="bkaRedeTitulo">Computadores na rede</h2>
+            <button class="modal-close" onclick="bkaFecharRede()">✕</button>
+        </div>
+        <div id="bkaRedeCorpo" class="bka-rede"></div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="bkaRedeVoltar" style="display:none;" onclick="bkaProcurar()">← Voltar</button>
+            <button type="button" class="btn btn-outline" onclick="bkaFecharRede()">Fechar</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function formatBytes(bytes) {
+    if (!bytes) return '0 KB';
+    const mb = bytes / (1024 * 1024);
+    return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/* pct = null deixa a barra em modo indeterminado (etapa sem tamanho conhecido,
+   como o servidor montando o JSON ou gravando os dados restaurados). */
+function setProgress(prefixo, pct, label, estado = '') {
+    const wrap = document.getElementById(`${prefixo}Progress`);
+    const track = document.getElementById(`${prefixo}Track`);
+    const fill = document.getElementById(`${prefixo}Fill`);
+    wrap.hidden = false;
+    wrap.className = `progress-wrap${estado ? ' progress-' + estado : ''}`;
+    document.getElementById(`${prefixo}Label`).textContent = label;
+
+    if (pct === null) {
+        track.classList.add('indeterminate');
+        fill.style.width = '';
+        document.getElementById(`${prefixo}Pct`).textContent = '…';
+        return;
+    }
+    track.classList.remove('indeterminate');
+    const valor = Math.max(0, Math.min(100, Math.round(pct)));
+    fill.style.width = `${valor}%`;
+    document.getElementById(`${prefixo}Pct`).textContent = `${valor}%`;
+}
+
+function nomeDoBackup(xhr) {
+    const cd = xhr.getResponseHeader('Content-Disposition') || '';
+    const m = cd.match(/filename=([^;]+)/i);
+    return m ? m[1].trim().replace(/["']/g, '') : 'backup_raas_caps.json';
+}
+
+function salvarArquivo(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadBackup() {
+    const btn = document.getElementById('btnBackup');
+    btn.disabled = true;
+    setProgress('download', null, 'Gerando backup no servidor…');
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/backup/download');
+    xhr.responseType = 'blob';
+
+    xhr.onprogress = (e) => {
+        if (e.lengthComputable) {
+            setProgress('download', (e.loaded / e.total) * 100,
+                `Baixando backup… ${formatBytes(e.loaded)} de ${formatBytes(e.total)}`);
+        } else {
+            setProgress('download', null, `Baixando backup… ${formatBytes(e.loaded)}`);
+        }
+    };
+
+    xhr.onload = () => {
+        btn.disabled = false;
+        if (xhr.status !== 200) {
+            setProgress('download', 100, 'Falha ao gerar o backup', 'error');
+            showToast('Erro ao gerar backup', 'error');
+            return;
+        }
+        const blob = xhr.response;
+        salvarArquivo(blob, nomeDoBackup(xhr));
+        setProgress('download', 100, `Backup concluído (${formatBytes(blob.size)})`, 'done');
+        showToast('Backup gerado com sucesso', 'success');
+    };
+
+    xhr.onerror = () => {
+        btn.disabled = false;
+        setProgress('download', 100, 'Falha de conexão ao baixar o backup', 'error');
+        showToast('Erro ao gerar backup', 'error');
+    };
+
+    xhr.send();
+}
+
+function handleRestore(e) {
+    const input = e.target;
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';  // permite reenviar o mesmo arquivo
+    if (!confirm('A restauração substituirá TODOS os dados atuais. Continuar?')) return;
+
+    const btn = document.getElementById('btnRestore');
+    btn.disabled = true;
+    setProgress('upload', 0, `Enviando ${file.name} (${formatBytes(file.size)})…`);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/backup/restaurar');
+
+    xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        setProgress('upload', (e.loaded / e.total) * 100,
+            `Enviando arquivo… ${formatBytes(e.loaded)} de ${formatBytes(e.total)}`);
+    };
+
+    // Upload terminou; o tempo restante é o servidor gravando os dados.
+    xhr.upload.onload = () => setProgress('upload', null, 'Restaurando dados no servidor…');
+
+    xhr.onload = () => {
+        btn.disabled = false;
+        if (xhr.status !== 200) {
+            let msg = 'Erro ao restaurar backup';
+            try {
+                const err = JSON.parse(xhr.responseText);
+                if (typeof err.detail === 'string') msg = err.detail;
+            } catch (erro) { /* resposta sem JSON */ }
+            setProgress('upload', 100, msg, 'error');
+            showToast(msg, 'error');
+            return;
+        }
+        setProgress('upload', 100, 'Restauração concluída — recarregando…', 'done');
+        showToast('Backup restaurado com sucesso', 'success');
+        setTimeout(() => location.reload(), 1500);
+    };
+
+    xhr.onerror = () => {
+        btn.disabled = false;
+        setProgress('upload', 100, 'Falha de conexão ao enviar o arquivo', 'error');
+        showToast('Erro ao restaurar backup', 'error');
+    };
+
+    xhr.send(formData);
+}
+
+// ── Backup automático ────────────────────────────────────────────────────
+(function () {
+    const card = document.getElementById('backupAutoCard');
+    if (!card) return;
+    const $ = (id) => document.getElementById(id);
+    const MAX_HORARIOS = 6;
+    const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+
+    async function api(url, opcoes = {}) {
+        const resp = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opcoes });
+        const corpo = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(typeof corpo.detail === 'string' ? corpo.detail : 'Não foi possível concluir.');
+        return corpo;
+    }
+
+    function desenharStatus(c) {
+        const box = $('bkaStatus');
+        const partes = [];
+        if (c.ativo && c.proximo) partes.push(`⏰ Próximo backup: <strong>${escapeHtml(c.proximo)}</strong>`);
+        else if (!c.ativo) partes.push('Backup automático desligado.');
+        if (c.ultimo_em) {
+            partes.push(`${c.ultimo_ok ? '✅' : '❌'} Último: <strong>${escapeHtml(c.ultimo_em)}</strong> — ${escapeHtml(c.ultima_msg || '')}`);
+        }
+        box.innerHTML = partes.join('<br>');
+        box.className = 'bka-status' + (c.ultimo_ok === false ? ' erro' : c.ativo ? ' ok' : '');
+        $('bkaAtivoTxt').textContent = c.ativo ? 'Ligado' : 'Desligado';
+    }
+
+    function bkaAddHorario(valor) {
+        const box = $('bkaHorarios');
+        if (box.children.length >= MAX_HORARIOS) { showToast(`No máximo ${MAX_HORARIOS} horários`, 'error'); return; }
+        const item = document.createElement('span');
+        item.className = 'bka-hora';
+        item.innerHTML = `<input type="time" value="${escapeHtml(valor)}"><button type="button" title="Remover">✕</button>`;
+        item.querySelector('button').onclick = () => { item.remove(); $('bkaAddHora').disabled = false; };
+        box.appendChild(item);
+        $('bkaAddHora').disabled = box.children.length >= MAX_HORARIOS;
+        if (!valor) item.querySelector('input').focus();
+    }
+
+    function preencher(c) {
+        $('bkaAtivo').checked = c.ativo;
+        $('bkaDestino').value = c.destino || '';
+        $('bkaManter').value = c.manter || 30;
+        $('bkaDias').querySelectorAll('input').forEach((i) => { i.checked = c.dias.includes(+i.value); });
+        $('bkaHorarios').innerHTML = '';
+        (c.horarios.length ? c.horarios : ['']).forEach(bkaAddHorario);
+        desenharStatus(c);
+    }
+
+    function lerFormulario() {
+        return {
+            ativo: $('bkaAtivo').checked,
+            destino: $('bkaDestino').value.trim(),
+            dias: Array.from($('bkaDias').querySelectorAll('input:checked')).map((i) => +i.value),
+            horarios: Array.from($('bkaHorarios').querySelectorAll('input')).map((i) => i.value).filter(Boolean),
+            manter: parseInt($('bkaManter').value, 10) || 30,
+        };
+    }
+
+    async function ocupado(btn, fn) {
+        btn.disabled = true;
+        try { await fn(); } catch (e) { showToast(e.message, 'error'); } finally { btn.disabled = false; }
+    }
+
+    window.bkaAddHorario = bkaAddHorario;
+
+    window.bkaSalvar = () => ocupado($('bkaSalvar'), async () => {
+        const c = await api('/api/backup/auto', { method: 'PUT', body: JSON.stringify(lerFormulario()) });
+        preencher(c);
+        showToast(c.ativo ? 'Backup automático ligado' : 'Configuração salva (backup automático desligado)');
+    });
+
+    window.bkaTestar = () => ocupado(document.activeElement, async () => {
+        const r = await api('/api/backup/auto/testar', { method: 'POST', body: JSON.stringify({ destino: $('bkaDestino').value }) });
+        showToast(r.mensagem);
+    });
+
+    window.bkaExecutar = () => ocupado($('bkaAgora'), async () => {
+        const destinoSalvo = (await api('/api/backup/auto')).destino;
+        if (destinoSalvo !== $('bkaDestino').value.trim()) throw new Error('Salve a configuração antes de fazer o backup (a pasta mudou).');
+        $('bkaStatus').innerHTML = '⏳ Gerando e copiando o backup…';
+        try {
+            const r = await api('/api/backup/auto/executar', { method: 'POST' });
+            showToast('Backup concluído: ' + r.mensagem);
+        } finally {
+            preencher(await api('/api/backup/auto'));
+        }
+    });
+
+    window.bkaConectar = () => ocupado(document.activeElement, async () => {
+        const destino = $('bkaDestino').value.trim().replace(/^\\+/, '');
+        const host = destino.split('\\')[0];
+        if (!host) throw new Error('Informe primeiro a pasta de destino (\\\\COMPUTADOR\\Pasta).');
+        const r = await api('/api/backup/auto/rede/conectar', {
+            method: 'POST', body: JSON.stringify({ host, usuario: $('bkaUsuario').value.trim(), senha: $('bkaSenha').value }),
+        });
+        $('bkaSenha').value = '';
+        showToast(r.mensagem);
+    });
+
+    // ── Procurar na rede ──
+    const modal = $('bkaRedeModal');
+    const corpo = $('bkaRedeCorpo');
+    window.bkaFecharRede = () => { modal.style.display = 'none'; };
+
+    window.bkaProcurar = async () => {
+        modal.style.display = 'flex';
+        $('bkaRedeTitulo').textContent = 'Computadores na rede';
+        $('bkaRedeVoltar').style.display = 'none';
+        corpo.innerHTML = '<div class="bka-rede-msg">🔍 Procurando computadores… (pode levar alguns segundos)</div>';
+        try {
+            const r = await api('/api/backup/auto/rede');
+            const itens = [
+                ...r.computadores.map((c) => ({ host: c.nome, sub: c.descricao || 'Computador da rede', icone: '🖥️' })),
+                ...r.ips.map((ip) => ({ host: ip, sub: 'Dispositivo na rede (IP)', icone: '🌐' })),
+            ];
+            corpo.innerHTML = (r.rede ? `<div class="bka-rede-msg">Procurando a partir do servidor: ${escapeHtml(r.rede)}</div>` : '') +
+                (r.aviso ? `<div class="bka-rede-aviso">${escapeHtml(r.aviso)}</div>` : '') +
+                (itens.length ? itens.map((it) => `<button type="button" class="bka-rede-item" data-host="${escapeHtml(it.host)}">
+                    <span>${it.icone}</span><div><strong>${escapeHtml(it.host)}</strong><small>${escapeHtml(it.sub)}</small></div></button>`).join('')
+                    : '<div class="bka-rede-msg">Nenhum computador encontrado.</div>');
+        } catch (e) {
+            corpo.innerHTML = `<div class="bka-rede-aviso">${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    corpo.addEventListener('click', async (e) => {
+        const pasta = e.target.closest('[data-pasta]');
+        if (pasta) {
+            $('bkaDestino').value = pasta.dataset.pasta;
+            bkaFecharRede();
+            showToast('Pasta escolhida. Clique em Testar e depois em Salvar configuração.');
+            return;
+        }
+        const item = e.target.closest('[data-host]');
+        if (!item) return;
+        const host = item.dataset.host;
+        $('bkaRedeTitulo').textContent = `Pastas compartilhadas em ${host}`;
+        $('bkaRedeVoltar').style.display = '';
+        corpo.innerHTML = '<div class="bka-rede-msg">📂 Buscando pastas compartilhadas…</div>';
+        try {
+            const r = await api(`/api/backup/auto/rede/pastas?host=${encodeURIComponent(host)}`);
+            corpo.innerHTML = r.pastas.length
+                ? r.pastas.map((p) => `<button type="button" class="bka-rede-item" data-pasta="\\\\${escapeHtml(host)}\\${escapeHtml(p)}">
+                    <span>📁</span><div><strong>${escapeHtml(p)}</strong><small>\\\\${escapeHtml(host)}\\${escapeHtml(p)}</small></div></button>`).join('')
+                : '<div class="bka-rede-msg">Este computador não tem pastas compartilhadas visíveis.</div>';
+        } catch (err) {
+            corpo.innerHTML = `<div class="bka-rede-aviso">${escapeHtml(err.message)}</div>`;
+        }
+    });
+
+    api('/api/backup/auto').then(preencher).catch((e) => showToast(e.message, 'error'));
+})();
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.bka-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.bka-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+.bka-switch input { display: none; }
+.bka-slider { width: 46px; height: 26px; border-radius: 13px; background: #cbd5e1; position: relative; transition: background .2s; }
+.bka-slider::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .2s; }
+.bka-switch input:checked + .bka-slider { background: var(--secondary); }
+.bka-switch input:checked + .bka-slider::after { left: 23px; }
+.bka-status { margin: 14px 0 18px; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.7; background: var(--muted-bg); color: var(--dark); }
+.bka-status:empty { display: none; }
+.bka-status.ok { background: var(--secondary-light); color: #065f46; }
+.bka-status.erro { background: var(--danger-light); color: #991b1b; }
+.bka-destino { display: flex; gap: 8px; }
+.bka-destino input { flex: 1; font-family: monospace; }
+.bka-cred { margin-top: 8px; font-size: 13px; }
+.bka-cred summary { cursor: pointer; color: var(--primary); font-weight: 500; }
+.bka-cred p { color: var(--muted); margin: 6px 0; }
+.bka-cred-campos { display: flex; gap: 8px; flex-wrap: wrap; }
+.bka-cred-campos input { flex: 1; min-width: 160px; }
+.bka-grade { display: grid; grid-template-columns: auto 1fr auto; gap: 18px 28px; margin-top: 10px; align-items: start; }
+.bka-dias { display: flex; gap: 6px; flex-wrap: wrap; }
+.bka-dia input { display: none; }
+.bka-dia span { display: inline-block; min-width: 44px; text-align: center; padding: 7px 8px; border-radius: 8px; border: 1.5px solid var(--border); cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted); background: #fff; }
+.bka-dia input:checked + span { background: var(--primary); border-color: var(--primary); color: #fff; }
+.bka-horarios { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.bka-hora { display: inline-flex; align-items: center; border: 1.5px solid var(--border); border-radius: 8px; background: #fff; }
+.bka-hora input { border: none; padding: 6px 8px; font-size: 14px; background: transparent; }
+.bka-hora button { border: none; background: none; cursor: pointer; color: var(--muted); padding: 0 8px; }
+.bka-manter { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.bka-manter input { width: 80px; }
+.bka-acoes { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.bka-rede { max-height: 55vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.bka-rede-item { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; background: #fff; cursor: pointer; font: inherit; }
+.bka-rede-item:hover { border-color: var(--primary); background: var(--primary-light); }
+.bka-rede-item span { font-size: 22px; }
+.bka-rede-item small { display: block; color: var(--muted); font-size: 12px; font-family: monospace; }
+.bka-rede-msg { padding: 18px; text-align: center; color: var(--muted); }
+.bka-rede-aviso { padding: 10px 12px; border-radius: 8px; background: var(--warning-light); color: #92400e; font-size: 13px; }
+@media (max-width: 900px) { .bka-grade { grid-template-columns: 1fr; } .bka-destino { flex-wrap: wrap; } }
+</style>
+{% endblock %}

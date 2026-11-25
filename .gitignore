@@ -1,0 +1,35 @@
+*__pycache__/*
+*.pyc
+
+raas-caps.jsx.V04.27.fev2026.jsx
+raas_caps.db
+raas_caps.db-wal
+raas_caps.db-shm
+debug.log
+.env
+.venv/
+secret.key
+python_path.txt
+logs/
+
+iniciar_servidor.bat
+instalar_inicio_automatico.bat
+logs/
+secret.key
+raas_caps_ANTES_DA_PURGA_*.db*
+.vscode/settings.json
+
+# Snapshots diarios do banco (dados de pacientes - nunca versionar)
+backups_auto/
+.coverage
+
+
+# ── Edição servidor ──
+# Dumps do PostgreSQL: dados de saúde identificáveis, nunca versionar.
+backups/
+*.sql.gz
+# JSON gerado na migração do banco local (tem dados de pacientes).
+backup_do_banco_local.json
+# Volume local do banco em docker-compose
+data/
+.env.prod

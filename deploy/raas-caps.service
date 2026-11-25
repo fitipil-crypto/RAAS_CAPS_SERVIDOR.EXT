@@ -1,0 +1,79 @@
+# RAAS-CAPS como serviço do systemd — alternativa ao Docker.
+#
+# Use esta opção quando o servidor já tem PostgreSQL instalado ou quando a
+# equipe prefere não usar Docker. Com Docker, prefira o docker-compose.prod.yml:
+# é menos peça para manter.
+#
+# Instalação:
+#   sudo cp deploy/raas-caps.service /etc/systemd/system/
+#   sudo nano /etc/systemd/system/raas-caps.service    # confira os caminhos
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now raas-caps
+#   sudo systemctl status raas-caps
+#   journalctl -u raas-caps -f                          # acompanhar o log
+#
+# Antes disso, no servidor:
+#   sudo -u raas python3 -m venv /home/raas/raas-caps/.venv
+#   sudo -u raas /home/raas/raas-caps/.venv/bin/pip install -r requirements.txt
+#   sudo -u raas nano /home/raas/raas-caps/.env
+# E o nginx como proxy reverso, apontando para 127.0.0.1:8000
+# (use deploy/nginx.conf.template como base, trocando http://web:8000).
+
+[Unit]
+Description=RAAS-CAPS (edicao servidor) - Atencao Psicossocial
+Documentation=file:///home/raas/raas-caps/README_SERVIDOR.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+# O gunicorn avisa o systemd quando esta pronto (sd_notify), entao o
+# `systemctl start` so retorna com os workers de pe.
+Type=notify
+NotifyAccess=main
+User=raas
+Group=raas
+WorkingDirectory=/home/raas/raas-caps
+EnvironmentFile=/home/raas/raas-caps/.env
+
+# Escuta so em 127.0.0.1: quem fala com a internet e entrega HTTPS e o nginx.
+# Sem isso a porta 8000 ficaria exposta, servindo HTTP em claro.
+ExecStart=/home/raas/raas-caps/.venv/bin/gunicorn main:app \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --workers 3 \
+    --bind 127.0.0.1:8000 \
+    --timeout 120 \
+    --graceful-timeout 30 \
+    --access-logfile - \
+    --error-logfile -
+
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+Restart=always
+RestartSec=5
+
+# ── Endurecimento ──
+# O servico so precisa escrever no que e dele. Se a aplicacao for comprometida,
+# estes limites reduzem o que o atacante alcanca no servidor.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/raas/raas-caps/uploads /home/raas/raas-caps/exports /home/raas/raas-caps/logs
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=raas-caps
+
+[Install]
+WantedBy=multi-user.target

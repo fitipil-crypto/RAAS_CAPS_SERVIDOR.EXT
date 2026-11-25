@@ -1,0 +1,87 @@
+# RAAS-CAPS — edição servidor. PostgreSQL + aplicação + nginx com HTTPS.
+#
+#   cp .env.prod.example .env   (e preencha)
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# O nginx é o único serviço com porta publicada. A aplicação e o banco ficam na
+# rede interna do compose: nem o PostgreSQL nem a porta 8000 ficam acessíveis
+# pela internet, mesmo que o firewall do servidor seja mal configurado.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-raas_caps}
+      POSTGRES_USER: ${POSTGRES_USER:-raas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    volumes:
+      - pgdados:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      # A aplicação só sobe quando o banco aceita conexão: sem isso o primeiro
+      # boot falha nas migrações e o container entra em laço de reinício.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raas} -d ${POSTGRES_DB:-raas_caps}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-raas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-raas_caps}
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY no .env com um valor longo e aleatorio}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
+      DEBUG: "false"
+      # O nginx entrega HTTPS e repassa X-Forwarded-*: o cookie de sessão vai
+      # como Secure e a checagem de Origin usa o host real.
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+      ORIGENS_PERMITIDAS: ${DOMINIO}
+      SESSAO_INATIVIDADE_MIN: ${SESSAO_INATIVIDADE_MIN:-30}
+      SESSAO_MAX_HORAS: ${SESSAO_MAX_HORAS:-12}
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./uploads:/app/uploads
+      - ./exports:/app/exports
+      - ./logs:/app/logs
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: "${DOMINIO:?Defina DOMINIO no .env, por exemplo raas.suacidade.gov.br}"
+    volumes:
+      - ./deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - certbot-cert:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    # A imagem do nginx expande os templates de /etc/nginx/templates com as
+    # variáveis de ambiente ao iniciar — é assim que o domínio entra na config.
+
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot-cert:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    # Tenta renovar a cada 12 h. O Let's Encrypt só renova nos últimos 30 dias
+    # de validade, então as outras tentativas não fazem nada.
+    entrypoint: ["/bin/sh", "-c", "while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h; done"]
+
+volumes:
+  pgdados:
+  certbot-cert:
+  certbot-www:

@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Unidades (CAPS) — RAAS-CAPS{% endblock %}
+{% block page_title %}Unidades (CAPS){% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>🏢 Unidades (CAPS)</h1>
+        <p>Cada unidade tem o seu CNES, a sua modalidade e os seus dados. Os pacientes,
+           atendimentos e relatórios de uma unidade não aparecem nas outras.</p>
+    </div>
+    {% if user.role == 'admin' %}
+    <div style="display:flex; gap:10px;">
+        <button class="btn btn-primary" onclick="abrirUnidade()">＋ Nova Unidade</button>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span>Unidades cadastradas</span>
+        <span class="badge badge-blue">{{ unidades | length }}</span>
+    </div>
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Unidade</th>
+                    <th>Modalidade</th>
+                    <th>CNES</th>
+                    <th>Município</th>
+                    <th>Leitos</th>
+                    <th>Pacientes</th>
+                    <th>Registros</th>
+                    <th>Situação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in unidades %}
+                <tr>
+                    <td class="cell-name">
+                        {{ u.nome }}
+                        {% if u.sigla %}<span class="badge badge-gray">{{ u.sigla }}</span>{% endif %}
+                        {% if u.id == unidade_ativa %}<span class="badge badge-green">ativa</span>{% endif %}
+                        {% if u.avisos %}
+                        <div class="unidade-avisos">
+                            {% for aviso in u.avisos %}<div>⚠️ {{ aviso }}</div>{% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-purple">{{ u.modalidade_nome }}</span></td>
+                    <td><span class="badge badge-gray">{{ u.cnes }}</span></td>
+                    <td>{{ u.municipio_nome or '—' }}{% if u.uf_code %} ({{ u.uf_code }}){% endif %}</td>
+                    <td>{{ u.leitos_acolhimento or 0 }}</td>
+                    <td>{{ totais.get(u.id, {}).get('pacientes', 0) }}</td>
+                    <td>{{ totais.get(u.id, {}).get('registros', 0) }}</td>
+                    <td><span class="badge badge-{{ 'green' if u.ativa else 'gray' }}">{{ 'Ativa' if u.ativa else 'Inativa' }}</span></td>
+                    <td>
+                        {% if user.role == 'admin' %}
+                        <button class="btn btn-ghost btn-sm" onclick="abrirUnidade('{{ u.id }}')" title="Editar">✏️</button>
+                        {% if u.ativa %}
+                        <button class="btn btn-ghost btn-sm" onclick="desativarUnidade('{{ u.id }}', '{{ u.nome }}')" title="Desativar">🚫</button>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9" class="sem-dados">Nenhuma unidade cadastrada.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if totais.get('') %}
+<div class="card">
+    <div class="card-body">
+        <strong>⚠️ Dados sem unidade.</strong>
+        Há {{ totais.get('', {}).get('pacientes', 0) }} paciente(s) e
+        {{ totais.get('', {}).get('registros', 0) }} registro(s) que ainda não pertencem a
+        nenhuma unidade — eles só aparecem na visão "Todas as unidades". Isso acontece em
+        bancos trazidos da versão de um só CAPS. Para atribuí-los, rode no servidor:
+        <pre>python -m unidade.migracao --listar
+python -m unidade.migracao --unidade &lt;id-da-unidade&gt;</pre>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header"><span>As 7 modalidades e seus parâmetros de referência</span></div>
+    <div class="table-wrapper">
+        <table class="data-table data-table-compacta">
+            <thead>
+                <tr>
+                    <th>Modalidade</th>
+                    <th>Porte populacional</th>
+                    <th>Faixa etária</th>
+                    <th>Funcionamento</th>
+                    <th>Acolhimento noturno</th>
+                    <th>Fundamento</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in modalidades %}
+                <tr>
+                    <td class="cell-name">{{ m.nome }}</td>
+                    <td>{% if m.populacao_minima %}acima de {{ "{:,}".format(m.populacao_minima).replace(",", ".") }} hab.{% else %}—{% endif %}</td>
+                    <td>{{ m.faixa_etaria }}</td>
+                    <td>{{ m.funcionamento }}</td>
+                    <td>{{ m.leitos }}</td>
+                    <td class="unidade-fundamento">{{ m.fundamento }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-body">
+        <p class="unidade-nota">
+            Estes números são <strong>referência, não travas</strong>: a habilitação pode ser
+            regional ou decisão da gestão, e o texto da Portaria 3.088/2011 teve republicações
+            com valores divergentes. O sistema avisa quando o cadastro foge do previsto e deixa
+            a decisão com a equipe.
+        </p>
+    </div>
+</div>
+
+<!-- Modal de cadastro/edição -->
+<div class="modal-overlay" id="modalUnidade">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h2 id="modalUnidadeTitulo">Nova Unidade</h2>
+            <button class="modal-close" onclick="fecharUnidade()">&times;</button>
+        </div>
+        <form id="formUnidade" onsubmit="salvarUnidade(event)">
+            <input type="hidden" id="u_id">
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="u_nome">Nome do órgão *</label>
+                        <input type="text" id="u_nome" maxlength="200" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="u_sigla">Sigla</label>
+                        <input type="text" id="u_sigla" maxlength="20" placeholder="CAPS01">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="u_modalidade">Modalidade *</label>
+                        <select id="u_modalidade" required onchange="descreverModalidade()">
+                            <option value="">Selecione...</option>
+                            {% for m in modalidades %}
+                            <option value="{{ m.codigo }}">{{ m.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="u_cnes">CNES (7 dígitos) *</label>
+                        <input type="text" id="u_cnes" maxlength="7" inputmode="numeric" required>
+                    </div>
+                </div>
+                <div id="u_descricao_modalidade" class="unidade-descricao"></div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="u_cnpj">CNPJ</label>
+                        <input type="text" id="u_cnpj" maxlength="20">
+                    </div>
+                    <div class="form-group">
+                        <label for="u_leitos">Leitos de acolhimento noturno</label>
+                        <input type="number" id="u_leitos" min="0" max="999" value="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="u_municipio_nome">Município</label>
+                        <input type="text" id="u_municipio_nome" maxlength="120">
+                    </div>
+                    <div class="form-group">
+                        <label for="u_municipio_codigo">Código IBGE</label>
+                        <input type="text" id="u_municipio_codigo" maxlength="10">
+                    </div>
+                    <div class="form-group">
+                        <label for="u_uf_code">UF (código)</label>
+                        <input type="text" id="u_uf_code" maxlength="2" placeholder="35">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="u_populacao">População do município/região (habitantes)</label>
+                    <input type="number" id="u_populacao" min="0" placeholder="Usado só para o aviso de porte">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="u_destination_organ">Órgão de destino</label>
+                        <input type="text" id="u_destination_organ" maxlength="60">
+                    </div>
+                    <div class="form-group">
+                        <label for="u_destination_indicator">Indicador de destino</label>
+                        <select id="u_destination_indicator">
+                            <option value="M">M — Municipal</option>
+                            <option value="E">E — Estadual</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="u_versao">Versão do layout RAAS</label>
+                        <input type="text" id="u_versao" maxlength="10" placeholder="02.31">
+                    </div>
+                    <div class="form-group">
+                        <label for="u_bdversao">Versão do BDSIA</label>
+                        <input type="text" id="u_bdversao" maxlength="10" placeholder="vazio = competência + 'a'">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="u_observacoes">Observações</label>
+                    <textarea id="u_observacoes" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="u_ativa" checked> Unidade ativa</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharUnidade()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>const MODALIDADES = {{ modalidades | tojson }};</script>
+<script src="/static/js/unidades.js"></script>
+{% endblock %}

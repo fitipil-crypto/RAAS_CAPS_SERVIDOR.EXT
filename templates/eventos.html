@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block title %}Eventos — RAAS-CAPS{% endblock %}
+{% block page_title %}Eventos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>🎉 Eventos</h1>
+        <p>Lançamento múltiplo de atendimentos em atividades da unidade</p>
+    </div>
+    <div class="month-selector">
+        <label>Competência:</label>
+        <input type="month" id="monthPicker" value="{{ sel_month }}" onchange="changeMonth()">
+        <button class="btn btn-primary" onclick="openEventoModal()">＋ Criar evento</button>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card stat-primary"><div class="stat-icon">🎉</div><div class="stat-value">{{ eventos | length }}</div><div class="stat-label">Eventos na competência</div></div>
+    <div class="stat-card stat-secondary"><div class="stat-icon">👥</div><div class="stat-value">{{ total_participantes }}</div><div class="stat-label">Participantes</div></div>
+    <div class="stat-card stat-accent"><div class="stat-icon">📝</div><div class="stat-value">{{ eventos | sum(attribute='registros') }}</div><div class="stat-label">Registros lançados</div></div>
+</div>
+
+{% if not eventos %}
+<div class="card">
+    <div style="text-align:center;padding:60px;color:var(--muted);">
+        <div style="font-size:40px;margin-bottom:12px;">🎉</div>
+        <div style="font-weight:500;">Nenhum evento nesta competência</div>
+        <div style="font-size:13px;margin-top:4px;">Clique em "Criar evento" para começar</div>
+    </div>
+</div>
+{% endif %}
+
+{% for item in eventos %}
+<div class="card evento-card" data-evento-id="{{ item.evento.id }}" data-evento-nome="{{ item.evento.name }}" data-evento-data="{{ item.evento.event_date }}">
+    <div class="card-header evento-header">
+        <div>
+            <span class="evento-numero">Evento nº {{ item.numero }}</span>
+            <strong class="evento-titulo">{{ item.evento.name }}</strong>
+            <span class="evento-data" title="Data do evento">
+                <svg class="evento-data-icone" viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="1.1" y="2.6" width="13.8" height="12.3" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                    <path d="M1.1 6.4h13.8" stroke="currentColor" stroke-width="1.4"/>
+                    <path d="M4.8 1.1v2.8M11.2 1.1v2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                <span class="evento-data-num">{{ item.data.br }}</span>
+                {% if item.data.semana %}<span class="evento-data-semana">{{ item.data.semana }}</span>{% endif %}
+            </span>
+        </div>
+        <div class="evento-acoes">
+            <span class="badge badge-purple">{{ item.pacientes | length }} paciente(s)</span>
+            <span class="badge badge-blue">{{ item.registros }} registro(s)</span>
+            <button class="btn btn-outline btn-sm" onclick="openPacientesModal('{{ item.evento.id }}')">＋ Adicionar pacientes na lista</button>
+            <button class="btn btn-primary btn-sm" onclick="openLancamentoModal('{{ item.evento.id }}')">＋ Registros</button>
+            <button class="btn btn-ghost btn-sm" onclick="editEvento('{{ item.evento.id }}')" title="Editar evento">✏️</button>
+            <button class="btn btn-ghost btn-sm" onclick="deleteEvento('{{ item.evento.id }}')" title="Excluir evento">🗑</button>
+        </div>
+    </div>
+    <div class="card-body" style="padding:0;">
+        {% if item.pacientes %}
+        <ul class="evento-lista">
+            {% for p in item.pacientes %}
+            <li class="evento-paciente" data-patient-id="{{ p.id }}">
+                <span class="evento-paciente-nome">{{ p.name }}</span>
+                <span class="evento-paciente-pront">Pront: {{ p.prontuario or '—' }}</span>
+                <button class="btn btn-ghost btn-sm" onclick="removerPaciente('{{ item.evento.id }}', '{{ p.id }}')" title="Tirar da lista">✕</button>
+            </li>
+            {% endfor %}
+        </ul>
+        {% if item.resumo.profissionais or item.resumo.procedimentos %}
+        {# Fecha a lista dizendo quem atendeu e o que foi feito em comum para todos os participantes. #}
+        <div class="evento-rodape">
+            {% if item.resumo.profissionais %}
+            <div class="evento-rodape-linha">
+                <span class="evento-rodape-rotulo evento-rodape-prof-rotulo">Profissionais</span>
+                <span class="evento-rodape-itens">
+                    {% for prof in item.resumo.profissionais %}
+                    <span class="evento-rodape-item evento-rodape-prof">{{ prof.name }}{% if prof.cbo %} <span class="evento-rodape-cbo">CBO {{ prof.cbo }}</span>{% endif %}</span>
+                    {% endfor %}
+                </span>
+            </div>
+            {% endif %}
+            {% if item.resumo.procedimentos %}
+            <div class="evento-rodape-linha">
+                <span class="evento-rodape-rotulo evento-rodape-proc-rotulo">Procedimentos</span>
+                <span class="evento-rodape-itens">
+                    {% for proc in item.resumo.procedimentos %}
+                    <span class="evento-rodape-item evento-rodape-proc">{{ proc.code }} — {{ proc.name }}</span>
+                    {% endfor %}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div style="padding:28px;text-align:center;color:var(--muted);font-size:13px;">
+            Nenhum paciente na lista. Use "＋ Adicionar pacientes na lista".
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+<!-- Criar/editar evento -->
+<div class="modal-overlay" id="eventoModal" style="display:none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="eventoModalTitle">Novo Evento</h2>
+            <button class="modal-close" onclick="closeEventoModal()">✕</button>
+        </div>
+        <form id="eventoForm" onsubmit="saveEvento(event)">
+            <input type="hidden" id="evento-id">
+            <div class="form-group">
+                <label>Nome do Evento *</label>
+                <input type="text" id="evento-name" maxlength="120" placeholder="Ex: DIA DAS CRIANÇAS" oninput="uppercaseInput(this)" required>
+            </div>
+            <div class="form-group">
+                <label>Data do Evento *</label>
+                <input type="date" id="evento-date" required>
+            </div>
+            <div class="form-group">
+                <label>Observações</label>
+                <input type="text" id="evento-notes" maxlength="200" placeholder="Opcional">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeEventoModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Adicionar pacientes -->
+<div class="modal-overlay" id="pacientesModal" style="display:none;">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h2>Adicionar pacientes na lista</h2>
+            <button class="modal-close" onclick="closePacientesModal()">✕</button>
+        </div>
+        <input type="hidden" id="pacientes-evento-id">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+            <input type="text" id="pacienteFiltro" placeholder="🔎 Filtrar por nome ou prontuário..." autocomplete="off"
+                   oninput="filtrarPacientes()" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;outline:none;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="marcarTodosVisiveis(true)">Marcar visíveis</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="marcarTodosVisiveis(false)">Desmarcar todos</button>
+            <span class="badge badge-purple" id="pacientesSelecionados">0 selecionado(s)</span>
+        </div>
+        <div id="pacientesLista" class="evento-escolha"></div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="closePacientesModal()">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="salvarPacientes()">Adicionar à lista</button>
+        </div>
+    </div>
+</div>
+
+<!-- Excluir evento -->
+<div class="modal-overlay" id="excluirModal" style="display:none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Excluir evento</h2>
+            <button class="modal-close" onclick="closeExcluirModal()">✕</button>
+        </div>
+        <input type="hidden" id="excluir-evento-id">
+        <p id="excluirResumo" style="margin-bottom:14px;"></p>
+        {% if user.role == 'admin' %}
+        <label id="excluirOpcao" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="excluir-registros" style="width:auto;margin-top:2px;" onchange="atualizarAvisoExclusao()">
+            <span id="excluirOpcaoTexto"></span>
+        </label>
+        {% else %}
+        <p id="excluirNota" style="font-size:13px;color:var(--muted);">
+            Os atendimentos já lançados são mantidos. Apagá-los junto é exclusivo do administrador.
+        </p>
+        {% endif %}
+        <div id="excluirAviso" class="evento-aviso" hidden></div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="closeExcluirModal()">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="btnExcluir" onclick="confirmarExclusao()">Excluir</button>
+        </div>
+    </div>
+</div>
+
+<!-- Lançamento em lote -->
+<div class="modal-overlay" id="lancamentoModal" style="display:none;">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h2>Registros do Evento</h2>
+            <button class="modal-close" onclick="closeLancamentoModal()">✕</button>
+        </div>
+        <input type="hidden" id="lancamento-evento-id">
+        <div class="evento-resumo" id="lancamentoResumo"></div>
+
+        <div class="form-row">
+            <div class="form-group"><label>Data do Atendimento</label><input type="text" id="lancamento-data" disabled></div>
+            <div class="form-group"><label>Local</label>
+                <select id="lancamento-local"><option value="C">CAPS</option><option value="T">Território</option></select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Procedimentos * <span style="font-weight:400;color:var(--muted);font-size:12px;">(até 5 simultâneos)</span></label>
+            <div id="evtProcRows"></div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="addEvtProcRow()">＋ Adicionar procedimento</button>
+        </div>
+
+        <div class="form-group">
+            <label>Profissionais * <span style="font-weight:400;color:var(--muted);font-size:12px;">(até 10 profissionais)</span></label>
+            <div id="evtProfRows"></div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="addEvtProfRow()">＋ Adicionar profissional</button>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group"><label>Serviço (SRV)</label>
+                <select id="lancamento-srv">
+                    {% for o in srv_opts %}<option value="{{ o.value }}">{{ o.label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>Classificação (CLS)</label>
+                <select id="lancamento-cls">
+                    {% for o in cls_opts %}<option value="{{ o.value }}">{{ o.label }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="evento-previsao" id="lancamentoPrevisao"></div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="btnFecharLancamento" onclick="closeLancamentoModal()">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btnLancar" onclick="lancarRegistros()">Salvar</button>
+        </div>
+
+        <div class="reg-notice" id="evtNotice" hidden>
+            <div class="reg-notice-box" id="evtNoticeBox"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PACIENTES_DATA = [
+    {% for p in pacientes.values() %}
+    { id: "{{ p.id }}", name: {{ p.name | tojson }}, prontuario: {{ p.prontuario | tojson }}, cns: {{ p.cns | tojson }} },
+    {% endfor %}
+];
+const PROCEDIMENTOS_DATA = [
+    {% for p in active_procedimentos %}
+    { id: "{{ p.id }}", label: {{ p.label | tojson }} },
+    {% endfor %}
+];
+const PROFISSIONAIS_DATA = [
+    {% for p in active_profissionais %}
+    { id: "{{ p.id }}", name: {{ p.name | tojson }}, cbo: {{ p.cbo | tojson }} },
+    {% endfor %}
+];
+const EVENTOS_REGISTROS = {
+    {% for item in eventos %}
+    "{{ item.evento.id }}": {{ item.registros }},
+    {% endfor %}
+};
+const EVENTOS_PACIENTES = {
+    {% for item in eventos %}
+    "{{ item.evento.id }}": [{% for p in item.pacientes %}"{{ p.id }}"{% if not loop.last %},{% endif %}{% endfor %}],
+    {% endfor %}
+};
+</script>
+<script src="/static/js/eventos.js"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Mesma faixa verde dos grupos de paciente em Registros RAAS — a barra
+   identifica o bloco e separa o cabeçalho da lista de participantes. */
+.evento-header {
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px; flex-wrap:wrap;
+    background:var(--secondary-light);
+    padding:5px 20px;
+}
+/* Faixa ~40% mais baixa que o cabeçalho padrão do card: o recuo vertical
+   encolhe junto com os controles, senão os botões seguram a altura. */
+.evento-header .btn-sm { padding:2px 9px; font-size:12.5px; }
+.evento-header .badge { padding:1px 8px; font-size:11px; }
+/* Mesmo marcador vermelho pulsante da lista de atendimentos
+   (keyframes evento-cintila, em style.css). */
+.evento-numero {
+    display:inline-block; margin-right:8px; padding:1px 9px;
+    border-radius:999px; background:#fee2e2; color:#dc2626;
+    font-size:11px; font-weight:700; vertical-align:middle;
+    animation:evento-cintila 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .evento-numero { animation:none; } }
+.evento-titulo { font-size:15px; }
+/* A data é a informação que mais se procura na ficha: vai por extenso,
+   em pt-BR e com o dia da semana. O YYYY-MM-DD fica no data-attribute. */
+.evento-data {
+    display:inline-flex; align-items:center; gap:7px;
+    margin-left:10px; padding:1px 11px 1px 8px;
+    border:1px solid #c7d2fe; border-radius:999px;
+    background:var(--primary-light); color:#3730a3;
+    font-size:12px; font-weight:600; line-height:1.2;
+    vertical-align:middle; white-space:nowrap;
+}
+.evento-data-icone { width:13px; height:13px; flex:0 0 auto; opacity:.8; }
+.evento-data-num { letter-spacing:.2px; }
+.evento-data-semana {
+    padding-left:8px; border-left:1px solid #c7d2fe;
+    font-weight:500; text-transform:capitalize; opacity:.75;
+}
+.evento-acoes { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+.evento-lista { margin:0; padding:8px 20px 14px 28px; columns:2; column-gap:28px; list-style:none; }
+@media (max-width: 900px) { .evento-lista { columns:1; } }
+.evento-paciente {
+    break-inside: avoid;
+    display:flex; align-items:center; gap:8px;
+    padding:3px 0; font-size:13px;
+}
+/* Marcador em seta no lugar da numeração — a lista é de participantes,
+   a ordem entre eles não quer dizer nada. */
+.evento-paciente::before {
+    content:""; flex:0 0 auto;
+    width:13px; height:11px; margin-right:2px;
+    background:url("/static/img/marcador-evento.svg") no-repeat center/contain;
+}
+.evento-paciente-nome { font-weight:600; }
+.evento-paciente-pront { color:var(--muted); font-size:12px; }
+.evento-paciente .btn-sm { padding:0 6px; font-size:11px; visibility:hidden; }
+.evento-paciente:hover .btn-sm { visibility:visible; }
+
+.evento-escolha { max-height:46vh; overflow-y:auto; border:1px solid var(--border); border-radius:8px; }
+.evento-escolha label {
+    display:flex; align-items:center; gap:10px;
+    padding:7px 12px; border-bottom:1px solid var(--border);
+    font-size:13px; cursor:pointer;
+}
+.evento-escolha label:last-child { border-bottom:none; }
+.evento-escolha label:hover { background:var(--muted-bg); }
+.evento-escolha input[type="checkbox"] { width:auto; }
+.evento-escolha .ja-na-lista { color:var(--muted); }
+
+.evento-resumo {
+    background:var(--secondary-light); color:#065f46;
+    border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:13px;
+}
+.evento-previsao {
+    background:var(--muted-bg); border-radius:8px;
+    padding:10px 14px; margin-top:4px; font-size:13px; color:var(--muted);
+}
+.evt-row { display:flex; gap:8px; align-items:flex-start; margin-bottom:10px; }
+.evt-row .form-group { margin-bottom:0; }
+.evt-row .evt-select-group { flex:1 1 auto; min-width:0; }
+.evt-row .evt-qty-group { flex:0 0 72px; }
+.evt-row .evt-qty-group input { text-align:center; padding-left:6px; padding-right:6px; }
+.evt-row .evt-remove-btn { align-self:flex-start; margin-top:5px; flex-shrink:0; }
+.evt-row .evt-cbo { align-self:center; font-size:11px; color:var(--muted); white-space:nowrap; }
+
+.evento-aviso {
+    background:var(--danger-light); color:#991b1b;
+    border-radius:8px; padding:10px 14px; margin-top:12px; font-size:13px;
+}
+.evento-aviso[hidden] { display:none; }
+
+.evento-rodape {
+    border-top:1px solid var(--border);
+    padding:12px 20px 14px; margin-top:2px;
+    display:flex; flex-direction:column; gap:8px; font-size:12.5px;
+}
+.evento-rodape-linha { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.evento-rodape-rotulo {
+    flex:0 0 auto; min-width:104px;
+    text-transform:uppercase; letter-spacing:.4px;
+    font-size:11px; font-weight:700; color:var(--muted);
+}
+.evento-rodape-itens { display:flex; flex-wrap:wrap; gap:6px; }
+.evento-rodape-item {
+    background:var(--muted-bg); border:1px solid var(--border);
+    border-radius:999px; padding:3px 10px; font-size:11px;
+}
+/* Chips preenchidos e letra branca: separa de bate-pronto quem atendeu
+   (vinho) do que foi feito (marrom). Os rótulos ficam só coloridos. */
+.evento-rodape-prof {
+    color:#ffffff; background:#b24b6b; border-color:#b24b6b;
+}
+.evento-rodape-proc {
+    color:#ffffff; background:#9c6b3f; border-color:#9c6b3f;
+}
+.evento-rodape-prof-rotulo { color:#b24b6b; }
+.evento-rodape-proc-rotulo { color:#9c6b3f; }
+.evento-rodape-cbo { color:inherit; opacity:.78; font-size:10px; }
+
+
+</style>
+{% endblock %}

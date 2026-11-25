@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Relatórios Impressão — RAAS-CAPS{% endblock %}
+{% block page_title %}Relatórios Impressão{% endblock %}
+
+{% macro celula(c, col) -%}
+{%- if c is mapping and c.barra is defined -%}
+<td class="rimp-pct"><span class="rimp-barra" style="width:{{ [c.barra, 100] | min }}%"></span><span class="rimp-pct-num">{{ c.v }}</span></td>
+{%- elif c is mapping -%}
+<td{% if col.centro %} class="c"{% endif %} style="{% if c.cor %}color:#{{ c.cor }};{% endif %}{% if c.b %}font-weight:700;{% endif %}">{{ c.v }}</td>
+{%- else -%}
+<td{% if col.centro %} class="c"{% elif col.chave == 'nome' %} class="rimp-col-nome"{% endif %}>{{ c }}</td>
+{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-header no-print">
+    <div>
+        <h1>🖨️ Relatórios Impressão</h1>
+        <p>Monte o relatório com os campos e filtros que precisar e imprima ou exporte</p>
+    </div>
+    <div class="rimp-menu" id="rimpMenu">
+        <button type="button" class="btn btn-primary" id="rimpMenuBtn" aria-haspopup="true" aria-expanded="false">📤 Exportar / Imprimir ▾</button>
+        <div class="rimp-menu-lista" role="menu" hidden>
+            <a role="menuitem" target="_blank" rel="noopener" href="/api/relatorios/impressao/exportar?formato=pdf&{{ r.qs }}"><span class="rimp-ico rimp-pdf">PDF</span>Exportar PDF</a>
+            <a role="menuitem" href="/api/relatorios/impressao/exportar?formato=excel&{{ r.qs }}"><span class="rimp-ico rimp-xls">XLS</span>Exportar Excel</a>
+            <a role="menuitem" href="/api/relatorios/impressao/exportar?formato=csv&{{ r.qs }}"><span class="rimp-ico rimp-csv">CSV</span>Exportar CSV</a>
+            <hr>
+            <button type="button" role="menuitem" onclick="window.print()"><span class="rimp-ico rimp-print">🖨️</span>Imprimir</button>
+        </div>
+    </div>
+</div>
+
+<nav class="rimp-abas no-print">
+    <a href="/relatorios-impressao?tipo=pacientes" class="{% if r.tipo == 'pacientes' %}active{% endif %}">👥 Pacientes</a>
+    <a href="/relatorios-impressao?tipo=indicadores" class="{% if r.tipo == 'indicadores' %}active{% endif %}">🎯 Indicadores CAPS</a>
+    {% for chave, rotulo in abas_operacionais.items() %}
+    <a href="/relatorios-impressao?tipo={{ chave }}" class="{% if r.tipo == chave %}active{% endif %}">{{ rotulo }}</a>
+    {% endfor %}
+</nav>
+
+{% if r.tipo == 'pacientes' %}
+{% set f = r.filtros %}
+{% set avancados = f.sexo or f.etnia or f.bairro or f.cid or f.idade_min or f.idade_max or f.admissao_de or f.admissao_ate %}
+<form method="get" action="/relatorios-impressao" class="card rimp-painel no-print" id="rimpForm">
+    <input type="hidden" name="tipo" value="pacientes">
+    <input type="hidden" name="campos_enviados" value="1">
+    <div class="rimp-filtros">
+        <div class="form-group"><label>Buscar</label>
+            <input type="text" name="busca" value="{{ f.busca }}" placeholder="Nome, CNS, CPF ou prontuário">
+        </div>
+        <div class="form-group"><label>Médico Psiquiatra</label>
+            <select name="medico">
+                <option value="">Todos</option>
+                {% for m in opcoes.medicos %}<option value="{{ m }}" {% if m == f.medico %}selected{% endif %}>{{ m }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Técnico de Referência</label>
+            <input type="text" name="tecnico" value="{{ f.tecnico }}" placeholder="Nome do técnico">
+        </div>
+        <div class="form-group"><label>Situação</label>
+            <select name="situacao">
+                <option value="">Todas</option>
+                {% for valor, rotulo in opcoes.situacoes.items() %}<option value="{{ valor }}" {% if valor == f.situacao %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+                <option value="sem" {% if f.situacao == 'sem' %}selected{% endif %}>Sem situação</option>
+            </select>
+        </div>
+        <div class="form-group"><label>Ordenar por</label>
+            <select name="ordenar">
+                {% for valor, rotulo in opcoes.ordenacoes.items() %}<option value="{{ valor }}" {% if valor == f.ordenar or (not f.ordenar and valor == 'nome') %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <details class="rimp-secao" {% if avancados %}open{% endif %}>
+        <summary>🔎 Mais filtros{% if avancados %} <span class="rimp-badge">ativos</span>{% endif %}</summary>
+        <div class="rimp-filtros rimp-filtros-mais">
+            <div class="form-group"><label>Sexo</label>
+                <select name="sexo">
+                    <option value="">Todos</option>
+                    {% for valor, rotulo in opcoes.sexos.items() %}<option value="{{ valor }}" {% if valor == f.sexo %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>Etnia</label>
+                <select name="etnia">
+                    <option value="">Todas</option>
+                    {% for valor, rotulo in opcoes.etnias.items() %}<option value="{{ valor }}" {% if valor == f.etnia %}selected{% endif %}>{{ rotulo | title }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>Bairro</label>
+                <input type="text" name="bairro" value="{{ f.bairro }}" list="rimpBairros" placeholder="Parte do nome">
+                <datalist id="rimpBairros">{% for b in opcoes.bairros %}<option value="{{ b }}">{% endfor %}</datalist>
+            </div>
+            <div class="form-group"><label>CID começa com</label>
+                <input type="text" name="cid" value="{{ f.cid }}" placeholder="Ex: F84, F90" maxlength="10">
+            </div>
+            <div class="form-group"><label>Idade (anos)</label>
+                <div class="rimp-faixa">
+                    <input type="number" name="idade_min" value="{{ f.idade_min }}" min="0" max="120" placeholder="de">
+                    <input type="number" name="idade_max" value="{{ f.idade_max }}" min="0" max="120" placeholder="até">
+                </div>
+            </div>
+            <div class="form-group"><label>Data de admissão</label>
+                <div class="rimp-faixa">
+                    <input type="date" name="admissao_de" value="{{ f.admissao_de }}" title="De">
+                    <input type="date" name="admissao_ate" value="{{ f.admissao_ate }}" title="Até">
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <details class="rimp-secao" id="rimpCampos">
+        <summary>⚙️ Campos do relatório <span class="rimp-badge" id="rimpQtdCampos">{{ r.campos | length }} de {{ campos | length }}</span></summary>
+        <div class="rimp-presets">
+            <button type="button" class="btn btn-outline btn-sm" data-preset="padrao">Modelo planilha CAPS</button>
+            <button type="button" class="btn btn-outline btn-sm" data-preset="todos">Marcar todos</button>
+            <button type="button" class="btn btn-outline btn-sm" data-preset="nenhum">Só o nome</button>
+        </div>
+        <div class="rimp-campos">
+            {% for grupo in grupos_campos %}
+            <fieldset>
+                <legend>{{ grupo }}</legend>
+                {% for c in campos if c.grupo == grupo %}
+                <label class="rimp-check">
+                    <input type="checkbox" name="campo" value="{{ c.chave }}" {% if c.chave in r.campos %}checked{% endif %} {% if c.chave == 'nome' %}disabled{% endif %}>
+                    {% if c.chave == 'nome' %}<input type="hidden" name="campo" value="nome">{% endif %}
+                    {{ c.rotulo or c.titulo }}
+                </label>
+                {% endfor %}
+            </fieldset>
+            {% endfor %}
+        </div>
+    </details>
+
+    <div class="rimp-acoes">
+        <button type="submit" class="btn btn-primary">Aplicar</button>
+        <a href="/relatorios-impressao?tipo=pacientes&campos_enviados=1{% for c in r.campos %}&campo={{ c }}{% endfor %}" class="btn btn-outline">Limpar filtros</a>
+        <span class="rimp-contagem">{{ r.linhas | length }} paciente(s)</span>
+    </div>
+</form>
+
+{% set bloco = r.blocos[0] %}
+<div class="rimp-folha">
+    <div class="rimp-titulo">{{ r.titulo }}</div>
+    <div class="rimp-scroll">
+        <table class="rimp-tabela">
+            <thead>
+                <tr>{% for col in bloco.colunas %}<th{% if col.chave == 'nome' %} class="rimp-col-nome"{% endif %}>{{ col.titulo }}</th>{% endfor %}</tr>
+                <tr class="rimp-resumo"><td colspan="{{ bloco.colunas | length }}">Emitido em {{ emissao }} — {{ bloco.linhas | length }} paciente(s)</td></tr>
+            </thead>
+            <tbody>
+                {% for linha in bloco.linhas %}
+                <tr>{% for c in linha %}{{ celula(c, bloco.colunas[loop.index0]) }}{% endfor %}</tr>
+                {% else %}
+                <tr><td colspan="{{ bloco.colunas | length }}" class="rimp-vazio">{{ bloco.vazio }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% elif r.tipo == 'indicadores' %}
+<form method="get" action="/relatorios-impressao" class="card rimp-painel no-print" id="rimpForm">
+    <input type="hidden" name="tipo" value="indicadores">
+    <input type="hidden" name="secoes_enviadas" value="1">
+    <div class="rimp-filtros rimp-filtros-ind">
+        <div class="form-group"><label>Competência</label>
+            <input type="month" name="mes" value="{{ r.mes }}">
+        </div>
+        <p class="rimp-dica">Deixe a competência vazia para considerar todo o período. Os Indicadores de Cuidado são sempre de um mês: sem competência, usam o mês atual.</p>
+    </div>
+    <details class="rimp-secao" open>
+        <summary>📑 Seções do relatório <span class="rimp-badge" id="rimpQtdCampos">{{ r.secoes | length }} de {{ secoes | length }}</span></summary>
+        <div class="rimp-presets">
+            <button type="button" class="btn btn-outline btn-sm" data-preset="todos">Marcar todas</button>
+            <button type="button" class="btn btn-outline btn-sm" data-preset="nenhum">Desmarcar todas</button>
+        </div>
+        <div class="rimp-campos rimp-secoes">
+            {% for chave, rotulo in secoes.items() %}
+            <label class="rimp-check"><input type="checkbox" name="secao" value="{{ chave }}" {% if chave in r.secoes %}checked{% endif %}> {{ rotulo }}</label>
+            {% endfor %}
+        </div>
+    </details>
+    <div class="rimp-acoes">
+        <button type="submit" class="btn btn-primary">Aplicar</button>
+        <span class="rimp-contagem">Competência: {{ r.periodo }}</span>
+    </div>
+</form>
+
+<div class="rimp-folha rimp-folha-ind">
+    <div class="rimp-titulo">{{ r.titulo }} <small>— Competência: {{ r.periodo }} · Emitido em {{ emissao }}</small></div>
+    {% if not r.blocos %}<p class="rimp-vazio">Escolha ao menos uma seção.</p>{% endif %}
+    <div class="rimp-blocos">
+        {% for bloco in r.blocos %}
+        <section class="rimp-bloco {% if bloco.colunas | length > 5 %}rimp-bloco-largo{% endif %}">
+            <h3>{{ bloco.titulo }}</h3>
+            <table class="rimp-tabela">
+                <thead><tr>{% for col in bloco.colunas %}<th>{{ col.titulo }}</th>{% endfor %}</tr></thead>
+                <tbody>
+                    {% for linha in bloco.linhas %}
+                    <tr>{% for c in linha %}{{ celula(c, bloco.colunas[loop.index0]) }}{% endfor %}</tr>
+                    {% else %}
+                    <tr><td colspan="{{ bloco.colunas | length }}" class="rimp-vazio">{{ bloco.vazio }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+{# Abas operacionais: atendimentos, produção, busca ativa e cadastros incompletos #}
+{% set f = r.filtros %}
+<form method="get" action="/relatorios-impressao" class="card rimp-painel no-print" id="rimpForm">
+    <input type="hidden" name="tipo" value="{{ r.tipo }}">
+    {% if r.tipo in ['atendimentos', 'producao'] %}
+    <div class="rimp-filtros">
+        <div class="form-group"><label>Período</label>
+            <div class="rimp-faixa">
+                <input type="date" name="de" value="{{ f.de }}" title="De">
+                <input type="date" name="ate" value="{{ f.ate }}" title="Até">
+            </div>
+        </div>
+        <div class="form-group"><label>Profissional</label>
+            <select name="profissional"><option value="">Todos</option>
+                {% for p in r.opcoes.profissionais %}<option value="{{ p.id }}" {% if p.id == f.profissional %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Procedimento</label>
+            <select name="procedimento"><option value="">Todos</option>
+                {% for p in r.opcoes.procedimentos %}<option value="{{ p.id }}" {% if p.id == f.procedimento %}selected{% endif %}>{{ p.code }} — {{ p.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Local</label>
+            <select name="local"><option value="">Todos</option>
+                <option value="C" {% if f.local == 'C' %}selected{% endif %}>CAPS</option>
+                <option value="T" {% if f.local == 'T' %}selected{% endif %}>Território</option>
+            </select>
+        </div>
+    </div>
+    {% else %}
+    <div class="rimp-filtros">
+        {% if r.tipo == 'busca-ativa' %}
+        <div class="form-group"><label>Sem atendimento há pelo menos</label>
+            <div class="rimp-faixa"><input type="number" name="dias" min="1" max="999" value="{{ f.dias }}"><span style="align-self:center;">dias</span></div>
+        </div>
+        {% else %}
+        <div class="form-group"><label>Verificar apenas</label>
+            <select name="faltando"><option value="">Qualquer informação pendente</option>
+                {% for chave, rotulo, extrator in r.campos_incompletos %}<option value="{{ chave }}" {% if chave == f.faltando %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="form-group"><label>Situação</label>
+            <select name="situacao"><option value="">Todas</option>
+                {% for valor, rotulo in r.opcoes.situacoes.items() %}<option value="{{ valor }}" {% if valor == f.situacao %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+                <option value="sem" {% if f.situacao == 'sem' %}selected{% endif %}>Sem situação</option>
+            </select>
+        </div>
+        <div class="form-group"><label>Bairro</label>
+            <input type="text" name="bairro" value="{{ f.bairro }}" list="rimpBairrosOp" placeholder="Parte do nome">
+            <datalist id="rimpBairrosOp">{% for b in r.opcoes.bairros %}<option value="{{ b }}">{% endfor %}</datalist>
+        </div>
+        <div class="form-group"><label>Sexo</label>
+            <select name="sexo"><option value="">Todos</option>
+                {% for valor, rotulo in r.opcoes.sexos.items() %}<option value="{{ valor }}" {% if valor == f.sexo %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Idade (anos)</label>
+            <div class="rimp-faixa">
+                <input type="number" name="idade_min" value="{{ f.idade_min }}" min="0" max="120" placeholder="de">
+                <input type="number" name="idade_max" value="{{ f.idade_max }}" min="0" max="120" placeholder="até">
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="rimp-acoes">
+        <button type="submit" class="btn btn-primary">Aplicar</button>
+        <a href="/relatorios-impressao?tipo={{ r.tipo }}" class="btn btn-outline">Limpar filtros</a>
+        <span class="rimp-contagem">{{ r.descricao }}</span>
+    </div>
+</form>
+
+<div class="stats-grid rimp-resumo-cards">
+    {% for item in r.resumo %}
+    <div class="stat-card {{ ['stat-primary', 'stat-secondary', 'stat-accent'][loop.index0 % 3] }}"><div class="stat-icon">{{ item.icone }}</div><div class="stat-body">
+        <div class="stat-value">{{ item.valor }}</div><div class="stat-label">{{ item.label }}</div></div></div>
+    {% endfor %}
+</div>
+
+{% for bloco in r.blocos %}
+<div class="rimp-folha" style="margin-bottom:16px;">
+    <div class="rimp-titulo">{{ r.titulo }}</div>
+    <div class="rimp-scroll">
+        <table class="rimp-tabela">
+            <thead>
+                <tr>{% for col in bloco.colunas %}<th{% if col.chave == 'paciente' %} class="rimp-col-nome"{% endif %}>{{ col.titulo }}</th>{% endfor %}</tr>
+                <tr class="rimp-resumo"><td colspan="{{ bloco.colunas | length }}">Emitido em {{ emissao }} — {{ bloco.linhas | length }} linha(s)</td></tr>
+            </thead>
+            <tbody>
+                {% for linha in bloco.linhas %}
+                <tr>{% for c in linha %}{{ celula(c, bloco.colunas[loop.index0]) }}{% endfor %}</tr>
+                {% else %}
+                <tr><td colspan="{{ bloco.colunas | length }}" class="rimp-vazio">{{ bloco.vazio }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<script>
+(function () {
+    const menu = document.getElementById('rimpMenu');
+    const btn = document.getElementById('rimpMenuBtn');
+    const lista = menu.querySelector('.rimp-menu-lista');
+    function abrir(sim) {
+        lista.hidden = !sim;
+        btn.setAttribute('aria-expanded', String(sim));
+    }
+    btn.addEventListener('click', () => abrir(lista.hidden));
+    lista.addEventListener('click', () => abrir(false));
+    document.addEventListener('click', (e) => { if (!menu.contains(e.target)) abrir(false); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') abrir(false); });
+
+    // Escolha de campos/seções: atalhos e contador.
+    const form = document.getElementById('rimpForm');
+    const caixas = Array.from(form.querySelectorAll('.rimp-campos input[type="checkbox"]:not(:disabled)'));
+    const contador = document.getElementById('rimpQtdCampos');
+    const total = form.querySelectorAll('.rimp-campos input[type="checkbox"]').length;
+    const PADRAO = {{ campos_padrao | tojson }};
+    function contar() {
+        const marcados = form.querySelectorAll('.rimp-campos input[type="checkbox"]:checked').length;
+        if (contador) contador.textContent = `${marcados} de ${total}`;
+    }
+    form.addEventListener('change', contar);
+    form.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
+        const preset = b.dataset.preset;
+        caixas.forEach((c) => {
+            c.checked = preset === 'todos' || (preset === 'padrao' && PADRAO.includes(c.value));
+        });
+        contar();
+    }));
+
+    // Clique numa linha a destaca em azul, como a seleção da planilha.
+    document.querySelectorAll('.rimp-tabela tbody').forEach((tb) => tb.addEventListener('click', (e) => {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        const ativa = tr.classList.contains('rimp-sel');
+        document.querySelectorAll('.rimp-tabela tr.rimp-sel').forEach(t => t.classList.remove('rimp-sel'));
+        if (!ativa) tr.classList.add('rimp-sel');
+    }));
+})();
+</script>
+{% endblock %}

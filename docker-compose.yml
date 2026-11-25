@@ -1,0 +1,40 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:///./data/raas_caps.db
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY no arquivo .env (valor longo e aleatório)}
+      DEBUG: "false"
+      # Os túneis (ngrok/cloudflared) entregam HTTPS e repassam X-Forwarded-*
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./exports:/app/exports
+
+  # Tunel opcional via ngrok:  docker compose --profile ngrok up -d
+  # O endereco publico aparece em http://localhost:4040 (painel do ngrok).
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: ["ngrok"]
+    restart: unless-stopped
+    command: ["http", "web:8000"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "127.0.0.1:4040:4040"
+    depends_on:
+      - web
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TOKEN}
+    depends_on:
+      - web
