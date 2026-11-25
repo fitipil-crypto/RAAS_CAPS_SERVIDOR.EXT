@@ -6,5 +6,5 @@ pytest-cov==7.0.0
 httpx==0.28.1
 
 # Qualidade e segurança
-ruff==0.15.12
+ruff==0.17.6
 pip-audit==2.9.0
