@@ -17,4 +17,4 @@ fpdf2==2.8.9
 psycopg[binary]==3.2.12
 # Servidor de produção: o uvicorn sozinho roda em um processo e não se recupera
 # de um worker travado. O gunicorn supervisiona os workers uvicorn.
-gunicorn==24.0.0
+gunicorn==27.0.1
