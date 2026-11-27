@@ -28,6 +28,11 @@ versão, renomeie essa seção para o número e a data, e marque o commit com
 - Os índices de consulta por unidade passaram da lista `_INDICES` do
   `database.py` para os próprios modelos (`__table_args__`).
 
+### Corrigido
+- A inicialização do banco agora é serializada entre threads. Antes,
+  `test_salvamentos_simultaneos_nao_duplicam` (8 clientes subindo a aplicação
+  ao mesmo tempo) podia travar a suíte inteira no Windows.
+
 ### Removido
 - Lista `_MIGRATIONS` (`ALTER TABLE ADD COLUMN` na inicialização). Um banco
   antigo de qualquer versão é completado pela migração de base `0001_base`.

@@ -13,6 +13,7 @@ O teste ``tests/test_migracoes.py`` falha se um modelo mudar sem migração.
 import importlib
 import logging
 import os
+import threading
 from pathlib import Path
 
 from sqlalchemy import create_engine, text, event
@@ -143,6 +144,7 @@ RAIZ_DO_PROJETO = Path(__file__).resolve().parent
 # Chave da trava do PostgreSQL que serializa as migrações (número arbitrário,
 # só precisa ser o mesmo em todos os processos da aplicação).
 _TRAVA_MIGRACAO = 727_2026
+_TRAVA_MIGRACAO_THREADS = threading.Lock()
 
 
 def configuracao_alembic():
@@ -163,12 +165,16 @@ def migrar_esquema(alvo=None) -> None:
     garante que só um processo migra por vez — o gunicorn sobe vários workers
     e todos passam por aqui ao iniciar; os outros esperam e encontram o banco
     já atualizado.
+
+    Dentro de um mesmo processo, a trava de thread faz o mesmo papel: o
+    Alembic guarda o ambiente da migração num objeto global (``alembic.context``)
+    e não pode rodar em duas threads ao mesmo tempo.
     """
     from alembic import command
 
     cfg = configuracao_alembic()
     alvo = alvo if alvo is not None else engine  # um Engine (o padrão ou o de um teste)
-    with alvo.begin() as conn:
+    with _TRAVA_MIGRACAO_THREADS, alvo.begin() as conn:
         if conn.dialect.name == "postgresql":
             conn.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _TRAVA_MIGRACAO})
         cfg.attributes["connection"] = conn
