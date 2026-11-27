@@ -12,7 +12,7 @@ itsdangerous==2.2.0
 bcrypt>=5.0.0
 python-dateutil>=2.9.0.post0
 openpyxl==3.1.5
-fpdf2==2.8.9
+fpdf2==2.9.0
 
 # ── Edição servidor ──
 # Driver do PostgreSQL (binário: não precisa compilar nem de libpq no sistema).
