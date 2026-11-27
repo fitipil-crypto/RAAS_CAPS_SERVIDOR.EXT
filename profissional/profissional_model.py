@@ -2,7 +2,7 @@
 Modelo de dados para profissionais.
 """
 import uuid as uuid_lib
-from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy import Column, String, Boolean, DateTime, Index
 from sqlalchemy.sql import func
 from database import Base
 from sistema.escopo import EscopoUnidade
@@ -10,6 +10,10 @@ from sistema.escopo import EscopoUnidade
 
 class Profissional(EscopoUnidade, Base):
     __tablename__ = "profissionais"
+    # O filtro por unidade entra em todo SELECT desta tabela (sistema/escopo.py).
+    __table_args__ = (
+        Index("ix_profissionais_unidade", "unidade_id"),
+    )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid_lib.uuid4()))
     name = Column(String(200), nullable=False)

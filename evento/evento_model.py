@@ -7,7 +7,7 @@ vez. Os registros gerados são Registros RAAS normais — o evento guarda
 apenas a lista de participantes e a identificação da atividade.
 """
 import uuid as uuid_lib
-from sqlalchemy import Column, String, DateTime, Text
+from sqlalchemy import Column, String, DateTime, Text, Index
 from sqlalchemy.sql import func
 from database import Base
 from sistema.escopo import EscopoUnidade
@@ -15,6 +15,10 @@ from sistema.escopo import EscopoUnidade
 
 class Evento(EscopoUnidade, Base):
     __tablename__ = "eventos"
+    # O filtro por unidade entra em todo SELECT desta tabela (sistema/escopo.py).
+    __table_args__ = (
+        Index("ix_eventos_unidade", "unidade_id"),
+    )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid_lib.uuid4()))
     name = Column(String(120), nullable=False)

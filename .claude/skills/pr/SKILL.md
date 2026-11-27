@@ -22,17 +22,19 @@ git diff --stat origin/main...HEAD
 
 ## 2. Validar antes de abrir (mesmo que o CI faça)
 
-O CI (`.github/workflows/ci.yml`) roda apenas `pytest`. Rode localmente:
+O CI (`.github/workflows/ci.yml`) roda lint, testes com cobertura mínima (SQLite e PostgreSQL), `pip-audit` e build do Docker. Rode localmente:
 
 ```bash
-pip install -q -r requirements.txt pytest ruff   # se faltar dependência
+pip install -q -r requirements-dev.txt   # se faltar dependência
 python -m pytest -q -p no:cacheprovider
-ruff check --select E9,F821,F811,F401,F841 .
+ruff check .                             # regras em ruff.toml
 ```
 
 - Todos os testes devem passar. Se algo falhar, corrija ou informe com a saída; nunca pule, desative ou comente teste para "ficar verde".
-- Erros `E9`/`F821` (sintaxe, nome indefinido) bloqueiam o PR. `F401`/`F841` em código tocado pelo PR devem ser corrigidos.
+- Qualquer erro do `ruff check .` bloqueia o PR.
 - Mudança de comportamento exige teste novo em `tests/` (padrão: `auth_client` para admin, `client` para anônimo).
+- Mudou um `*_model.py`? É preciso uma migração nova (`alembic revision --autogenerate -m "..."`), revisada e versionada. `tests/test_migracoes.py` falha sem ela.
+- Registre a mudança em `CHANGELOG.md` (seção "Não lançado"). Se mexeu numa regra de negócio, atualize também `docs/REQUISITOS.md`.
 
 ## 3. Revisar o próprio diff
 
@@ -56,7 +58,7 @@ Procure template em `.github/pull_request_template.md`, `.github/PULL_REQUEST_TE
 - Passos manuais, se houver UI (rota, perfil necessário: admin/coordenador/operador)
 
 ## Riscos / fora do escopo
-- Mudanças de permissão, migrações em database.py (_MIGRATIONS), itens deixados de fora
+- Mudanças de permissão, migrações novas em migrations/versions/, itens deixados de fora
 ```
 
 Seja fiel: se algo não foi testado (ex.: tela sem conferência visual), diga isso explicitamente.

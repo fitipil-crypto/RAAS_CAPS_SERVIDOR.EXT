@@ -184,12 +184,20 @@ $C logs -f web            # log da aplicação
 $C restart web            # reiniciar só a aplicação
 $C down                   # parar tudo (os dados ficam no volume)
 
-# atualizar para uma versão nova do código
-git pull && $C build web && $C up -d web
+# atualizar para uma versão nova do código (faça um backup antes)
+bash deploy/backup_postgres.sh && git pull && $C build web && $C up -d web
+$C exec web alembic current               # confere a versão do esquema
 
 bash deploy/backup_postgres.sh            # backup manual
 curl https://SEU_DOMINIO/saude            # checagem de saúde
 ```
+
+**Migrações do banco:** ao subir uma versão nova, a aplicação aplica sozinha
+as migrações pendentes (Alembic, pasta `migrations/`) antes de atender. Os 3
+workers não migram ao mesmo tempo: uma trava no PostgreSQL deixa um migrar e
+os outros esperarem. Se uma migração falhar, ela é desfeita inteira e o
+container não sobe; o erro aparece em `$C logs web`. Um banco criado antes do
+Alembic é completado automaticamente na primeira subida.
 
 O endpoint `/saude` faz um `SELECT 1` no banco, então responde **503** quando o
 PostgreSQL está fora do ar — é o que o Docker e o monitoramento devem observar,
@@ -325,7 +333,15 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-A suíte roda em SQLite temporário e cobre, além de tudo o que já havia:
+A suíte roda em SQLite temporário. Para rodá-la no PostgreSQL, como a CI
+faz, aponte `TEST_DATABASE_URL` para um banco **de teste** (o nome precisa
+conter `test`, porque a suíte apaga todas as tabelas dele):
+
+```bash
+TEST_DATABASE_URL=postgresql+psycopg://raas:senha@localhost/raas_test python -m pytest -q
+```
+
+Ela cobre, além de tudo o que já havia:
 
 - o isolamento entre unidades em leitura, contagem agregada, `UPDATE` e
   `DELETE` em massa;

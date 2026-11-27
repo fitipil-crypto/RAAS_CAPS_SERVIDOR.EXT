@@ -2,7 +2,7 @@
 Modelo de dados para registros RAAS.
 """
 import uuid as uuid_lib
-from sqlalchemy import Column, String, DateTime, Text, Integer
+from sqlalchemy import Column, String, DateTime, Text, Integer, Index
 from sqlalchemy.sql import func
 from database import Base
 from sistema.escopo import EscopoUnidade
@@ -10,10 +10,15 @@ from sistema.escopo import EscopoUnidade
 
 class Registro(EscopoUnidade, Base):
     __tablename__ = "registros_raas"
+    # O filtro por unidade entra em todo SELECT desta tabela (sistema/escopo.py).
+    __table_args__ = (
+        Index("ix_registros_unidade", "unidade_id"),
+        Index("ix_registros_unidade_mes", "unidade_id", "service_month"),
+    )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid_lib.uuid4()))
     service_month = Column(String(7), nullable=False, index=True)  # YYYY-MM
-    service_date = Column(String(10), nullable=False)  # YYYY-MM-DD
+    service_date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD
     patient_id = Column(String(36), nullable=False, index=True)
     professional_id = Column(String(36), nullable=True, index=True)
     procedure_id = Column(String(36), nullable=False, index=True)

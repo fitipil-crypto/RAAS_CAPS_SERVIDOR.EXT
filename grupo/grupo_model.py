@@ -11,7 +11,7 @@ ordem de criação), de modo que um grupo lançado depois, mas com data
 anterior, entre na posição certa sem precisar renumerar os outros.
 """
 import uuid as uuid_lib
-from sqlalchemy import Column, String, DateTime, Integer
+from sqlalchemy import Column, String, DateTime, Integer, Index
 from sqlalchemy.sql import func
 from database import Base
 from sistema.escopo import EscopoUnidade
@@ -19,6 +19,10 @@ from sistema.escopo import EscopoUnidade
 
 class Grupo(EscopoUnidade, Base):
     __tablename__ = "grupos"
+    # O filtro por unidade entra em todo SELECT desta tabela (sistema/escopo.py).
+    __table_args__ = (
+        Index("ix_grupos_unidade", "unidade_id"),
+    )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid_lib.uuid4()))
     service_month = Column(String(7), nullable=False, index=True)  # competência YYYY-MM

@@ -2,7 +2,7 @@
 Modelo de dados para pacientes.
 """
 import uuid as uuid_lib
-from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy import Column, String, Boolean, DateTime, Index
 from sqlalchemy.sql import func
 from database import Base
 from sistema.escopo import EscopoUnidade
@@ -10,6 +10,11 @@ from sistema.escopo import EscopoUnidade
 
 class Paciente(EscopoUnidade, Base):
     __tablename__ = "pacientes"
+    # O filtro por unidade entra em todo SELECT desta tabela (sistema/escopo.py).
+    __table_args__ = (
+        Index("ix_pacientes_unidade", "unidade_id"),
+        Index("ix_pacientes_unidade_nome", "unidade_id", "name"),
+    )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid_lib.uuid4()))
 

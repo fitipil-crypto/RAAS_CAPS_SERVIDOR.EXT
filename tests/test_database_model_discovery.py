@@ -1,29 +1,27 @@
-from sqlalchemy import inspect
-
 import database
-from database import Base, engine
 
 
-def test_novo_modelo_e_descoberto_e_criado_automaticamente(tmp_path, monkeypatch):
+def test_novo_modelo_e_descoberto(tmp_path):
+    """Todo *_model.py de um pacote é encontrado e importado: é assim que o
+    Alembic (migrations/env.py) e o criar_tabelas enxergam os modelos.
+
+    A tabela de um modelo novo não é mais criada sozinha: ela entra por uma
+    migração (ver tests/test_migracoes.py)."""
     package_dir = tmp_path / "modulo_novo"
-    package_dir.mkdir()
+    sub_dir = package_dir / "sub"
+    sub_dir.mkdir(parents=True)
     (package_dir / "__init__.py").write_text("", encoding="utf-8")
-    (package_dir / "nova_tabela_model.py").write_text(
-        "from sqlalchemy import Column, Integer\n"
-        "from database import Base\n\n"
-        "class NovaTabela(Base):\n"
-        "    __tablename__ = 'teste_tabela_descoberta'\n"
-        "    id = Column(Integer, primary_key=True)\n",
-        encoding="utf-8",
-    )
-    monkeypatch.syspath_prepend(str(tmp_path))
+    (package_dir / "nova_tabela_model.py").write_text("", encoding="utf-8")
+    (sub_dir / "outra_model.py").write_text("", encoding="utf-8")
+    (package_dir / "servico.py").write_text("", encoding="utf-8")
+    # Pasta sem __init__.py (como migrations/) e pasta oculta ficam de fora.
+    (tmp_path / "sem_pacote").mkdir()
+    (tmp_path / "sem_pacote" / "x_model.py").write_text("", encoding="utf-8")
+    (tmp_path / ".oculto").mkdir()
+    (tmp_path / ".oculto" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / ".oculto" / "y_model.py").write_text("", encoding="utf-8")
 
-    model_modules = database._descobrir_modelos(tmp_path)
-    assert model_modules == ["modulo_novo.nova_tabela_model"]
-    monkeypatch.setattr(database, "_descobrir_modelos", lambda _: model_modules)
-
-    database.criar_tabelas()
-    database.criar_tabelas()
-
-    assert "teste_tabela_descoberta" in Base.metadata.tables
-    assert "teste_tabela_descoberta" in inspect(engine).get_table_names()
+    assert database._descobrir_modelos(tmp_path) == [
+        "modulo_novo.nova_tabela_model",
+        "modulo_novo.sub.outra_model",
+    ]

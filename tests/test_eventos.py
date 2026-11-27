@@ -25,7 +25,7 @@ def base(auth_client):
         profissionais.append(r.json()["id"])
 
     procedimentos = []
-    for i, (code, nome) in enumerate([("0301080216", "ATENDIMENTO EM GRUPO"), ("0301080275", "PRATICAS CORPORAIS")]):
+    for code, nome in [("0301080216", "ATENDIMENTO EM GRUPO"), ("0301080275", "PRATICAS CORPORAIS")]:
         r = auth_client.post("/api/procedimentos/", json={"code": code, "name": nome})
         assert r.status_code == 200, r.text
         procedimentos.append(r.json()["id"])

@@ -2,7 +2,7 @@
 Modelo de dados para logs do sistema (auditoria).
 """
 import uuid as uuid_lib
-from sqlalchemy import Column, String, DateTime, Text, Integer
+from sqlalchemy import Column, String, DateTime, Text, Integer, Index
 from sqlalchemy.sql import func
 from database import Base
 from sistema.escopo import EscopoUnidade
@@ -10,6 +10,10 @@ from sistema.escopo import EscopoUnidade
 
 class LogSistema(EscopoUnidade, Base):
     __tablename__ = "logs_sistema"
+    # O filtro por unidade entra em todo SELECT desta tabela (sistema/escopo.py).
+    __table_args__ = (
+        Index("ix_logs_unidade", "unidade_id"),
+    )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid_lib.uuid4()))
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)

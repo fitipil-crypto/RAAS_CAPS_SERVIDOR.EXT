@@ -32,9 +32,9 @@ jobs:
 
       - run: pip install ruff==0.15.12
 
-      # Só erros graves (sintaxe, nomes indefinidos); sem reformatar o código existente.
+      # Regras em ruff.toml (pyflakes completo + bugbear); não reformata o código.
       - name: Ruff
-        run: ruff check --select E9,F63,F7,F82 --output-format=github .
+        run: ruff check --output-format=github .
 
   test:
     name: Testes
@@ -61,9 +61,12 @@ jobs:
           DATABASE_URL: "sqlite:///./test_raas_caps.db"
           SECRET_KEY: "test-secret-key"
           DEBUG: "true"
+        # --cov-fail-under: a CI falha se a cobertura cair abaixo do piso.
+        # Suba o número aos poucos, conforme os testes crescerem.
         run: |
           python -m pytest tests/ -v --tb=short \
-            --cov=. --cov-report=term --cov-report=xml
+            --cov=. --cov-report=term --cov-report=xml \
+            --cov-fail-under=__COV_MIN__
 
       # Apenas o relatório de cobertura: o .db de teste e tests/ não devem ser publicados.
       - name: Upload coverage
@@ -74,6 +77,52 @@ jobs:
           path: coverage.xml
           if-no-files-found: ignore
           retention-days: 7
+
+  # A produção roda em PostgreSQL: a mesma suíte (inclusive o teste que compara
+  # modelos e migrações) roda nele também, para pegar diferenças de dialeto.
+  test-postgres:
+    name: Testes (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Provisório: ainda não houve uma execução verde neste banco. Quando o job
+    # passar, remova esta linha para ele passar a bloquear o merge.
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: raas
+          POSTGRES_PASSWORD: raas
+          POSTGRES_DB: raas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U raas -d raas_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: "postgresql+psycopg://raas:raas@localhost:5432/raas_test"
+          SECRET_KEY: "test-secret-key"
+          DEBUG: "true"
+        run: python -m pytest tests/ -q --tb=short
 
   audit:
     name: Vulnerabilidades

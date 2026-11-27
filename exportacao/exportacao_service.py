@@ -115,8 +115,6 @@ def _calcular_campo_controle(soma16: int, soma15: int) -> str:
 
 def _build_header(config, comp, n_proc, campo_controle):
     """Registro 01 — cabeçalho (144 posições + CR/LF)."""
-    uf = _pad_l_strict(config.get("uf_code", "35"), 2)
-    cnes = _pad_l_strict(config.get("cnes_code", "0000000"), 7)
     dt_ger = datetime.now().strftime("%Y%m%d")
     # Versão BDSIA é editável; usa padrão se vazia
     bdversao = (config.get("bdversao") or "").strip()

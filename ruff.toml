@@ -1,0 +1,23 @@
+# Regras do ruff (lint). A CI roda `ruff check .` com esta configuração.
+#
+# Adoção gradual: começamos por regras que pegam bug de verdade e que o código
+# já cumpre. Para ampliar, acrescente um grupo em `select`, rode
+# `ruff check . --statistics`, corrija e só então versione.
+target-version = "py312"
+extend-exclude = ["migrations/versions"]
+
+[lint]
+select = [
+    "E4", "E7", "E9",  # erros de importação, comandos e sintaxe
+    "F",               # pyflakes: nome indefinido, import/variável sem uso...
+    "B",               # bugbear: armadilhas comuns de Python
+]
+ignore = [
+    "B008",  # Depends()/Form() no parâmetro padrão é o padrão do FastAPI
+    "E402",  # imports depois de código são intencionais (ver database.py, conftest.py)
+    "E712",  # `coluna == True` é como o SQLAlchemy monta o filtro; `is True` quebraria a consulta
+    "E741",  # nomes curtos como `l` em laços de layout do arquivo RAAS
+    # Pendentes — ligar depois de corrigir:
+    "B904",  # raise ... from err dentro de except (13 ocorrências)
+    "B905",  # zip() sem strict= (7 ocorrências)
+]

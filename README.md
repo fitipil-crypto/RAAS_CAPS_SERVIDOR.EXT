@@ -4,10 +4,15 @@ Sistema full-stack para gestão de RAAS (Relatório de Atividades Ambulatoriais)
 
 ## Tecnologias
 
-- **Backend:** FastAPI, SQLAlchemy, SQLite
+- **Backend:** FastAPI, SQLAlchemy, Alembic (migrações)
+- **Banco:** PostgreSQL (edição servidor) ou SQLite (versão local)
 - **Frontend:** Jinja2, HTML5, CSS3, JavaScript ES6+
-- **Auth:** Session-based com bcrypt (passlib)
+- **Auth:** sessão em cookie, senhas com bcrypt
 - **Validação:** Pydantic v2
+
+Requisitos e regras de negócio: [docs/REQUISITOS.md](docs/REQUISITOS.md) ·
+Instalação no servidor: [README_SERVIDOR.md](README_SERVIDOR.md) ·
+Mudanças: [CHANGELOG.md](CHANGELOG.md)
 
 ## Arquitetura
 
@@ -163,22 +168,39 @@ Para acessar o RAAS-CAPS de fora da rede local (ou mostrar o sistema a alguém),
 - Usuário: `admin`
 - Senha: `admin`
 
+## Desenvolvimento
+
+```bash
+pip install -r requirements-dev.txt
+
+python -m pytest -q        # testes
+ruff check .               # lint (regras em ruff.toml)
+```
+
+### Mudou um modelo? Gere uma migração
+
+O esquema do banco é versionado com Alembic. Ao criar ou alterar uma coluna,
+tabela ou índice em algum `*_model.py`:
+
+```bash
+alembic revision --autogenerate -m "descricao curta"
+```
+
+Revise o arquivo gerado em `migrations/versions/` e versione-o junto com o
+modelo. A aplicação aplica as migrações pendentes sozinha ao iniciar. Para
+aplicar ou desfazer à mão: `alembic upgrade head` / `alembic downgrade -1`.
+O teste `tests/test_migracoes.py` falha na CI se um modelo mudar sem migração.
+
+### Fluxo de trabalho
+
+1. Crie uma branch para cada mudança e faça commits pequenos, cada um com uma
+   mensagem que diga o porquê.
+2. Abra um PR. A CI roda lint, testes em SQLite e PostgreSQL, cobertura,
+   `pip-audit` e o build do Docker.
+3. Registre a mudança em [CHANGELOG.md](CHANGELOG.md) e, se mexer numa regra
+   de negócio, em [docs/REQUISITOS.md](docs/REQUISITOS.md).
+4. Ao publicar uma versão, marque o commit: `git tag -a vX.Y.Z -m "vX.Y.Z"`.
+
 ## Roadmap
 
-- [x] Análise do JSX original
-- [x] Estrutura de diretórios e arquivos base
-- [x] Módulo de usuários e autenticação
-- [x] Módulo de pacientes
-- [x] Módulo de profissionais
-- [x] Módulo de procedimentos
-- [x] Módulo de registros RAAS
-- [x] Módulo de configurações
-- [x] Módulo de importação RAAS
-- [x] Módulo de exportação RAAS
-- [x] Módulo de relatórios
-- [x] Módulo de backup
-- [x] Templates Jinja2
-- [x] CSS e JavaScript
-- [ ] Testes automatizados
-- [ ] Excluir dados em lote (frontend)
-- [ ] Validações avançadas de CNS/CPF
+Tarefas pendentes, por prioridade: [tasks/tasks-raas-caps.md](tasks/tasks-raas-caps.md).

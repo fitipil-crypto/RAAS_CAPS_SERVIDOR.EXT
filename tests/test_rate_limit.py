@@ -6,7 +6,7 @@ from sistema.rate_limit_middleware import RateLimitMiddleware
 
 def test_login_rate_limit(client):
     """5 tentativas de login erradas devem bloquear a 6ª."""
-    for i in range(5):
+    for _ in range(5):
         resp = client.post("/login", data={"username": "admin", "password": "wrong"})
         assert resp.status_code == 200
 
@@ -36,13 +36,13 @@ def test_api_rate_limit_por_usuario_logado(auth_client):
 
 def test_api_rate_limit_sem_login_por_ip(client):
     """Sem login, o limite continua sendo por IP (API_LIMIT)."""
-    for i in range(RateLimitMiddleware.API_LIMIT):
+    for _ in range(RateLimitMiddleware.API_LIMIT):
         assert client.get("/api/pacientes/").status_code != 429
     assert client.get("/api/pacientes/").status_code == 429
 
 
 def test_rate_limit_nao_afeta_get_login(client):
     """GET /login não deve ser rate limited (apenas POST)."""
-    for i in range(10):
+    for _ in range(10):
         resp = client.get("/login")
         assert resp.status_code == 200
