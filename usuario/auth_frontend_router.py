@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from sistema.log_service import LogService
 from sistema.templates import templates
+from unidade.unidade_service import UnidadeService
 from usuario.usuario_service import UsuarioService
 
 router = APIRouter(tags=["Frontend - Autenticação"])
@@ -45,6 +46,10 @@ def login_submit(request: Request, username: str = Form(""), password: str = For
     request.session.clear()  # nova sessão a cada login (evita fixação de sessão)
     request.session["user_id"] = user.id
     request.session["ultima_atividade"] = time.time()
+    # Entra direto na unidade em que a pessoa está lotada.
+    unidade_id = UnidadeService.unidade_ao_entrar(db, user)
+    if unidade_id:
+        request.session["unidade_id"] = unidade_id
     UsuarioService.atualizar_ultimo_login(db, user.id)
     LogService.registrar(db, action="LOGIN", user_id=user.id, username=user.username, method="POST", path="/login", status_code=200, details="Login bem-sucedido")
     return RedirectResponse(url="/", status_code=302)

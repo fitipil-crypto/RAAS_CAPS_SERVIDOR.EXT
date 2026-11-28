@@ -142,6 +142,11 @@ Admin e gestor trocam de unidade pelo seletor na barra superior, que tem também
 a visão **"Todas as unidades"** (soma de todos os CAPS, usada para comparar a
 rede, restaurar backup e conferir dados sem unidade).
 
+**Ao entrar no sistema**, todo usuário cai direto na unidade em que está
+lotado, qualquer que seja o perfil. Para admin e gestor isso é só o ponto de
+partida: eles continuam trocando pelo seletor. Admin ou gestor **sem
+lotação** (ou lotado numa unidade desativada) começa em "Todas as unidades".
+
 ---
 
 ## 4. Trazer os dados que já existem

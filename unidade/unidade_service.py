@@ -153,6 +153,20 @@ class UnidadeService:
         return escolhida if escolhida in permitidas else None
 
     @staticmethod
+    def unidade_ao_entrar(db: Session, usuario) -> str | None:
+        """Unidade em que o usuário cai logo depois do login: a da sua lotação.
+
+        Para coordenador e operador isso só antecipa o que o middleware já
+        garante. Para admin e gestor, que podem circular por todas, é o ponto
+        de partida: quem está lotado num CAPS começa nele e, se quiser, troca
+        de unidade (ou escolhe "Todas as unidades") pelo seletor. Sem lotação,
+        ou com a unidade da lotação desativada, a visão começa em todas.
+        """
+        if usuario is None or not usuario.unidade_id:
+            return None
+        return UnidadeService.resolver_unidade_ativa(db, usuario, usuario.unidade_id)
+
+    @staticmethod
     def unidade_padrao(db: Session) -> Unidade | None:
         """Primeira unidade ativa — usada quando só existe uma."""
         ativas = UnidadeService.listar(db, apenas_ativas=True)

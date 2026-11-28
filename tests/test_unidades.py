@@ -443,6 +443,76 @@ def test_gestor_circula_por_todas_as_unidades(auth_client):
     assert criado.json()["unidade_id"] is None
 
 
+# ── Unidade ao entrar no sistema ────────────────────────────────────────
+
+@pytest.fixture
+def unidades_para_login(auth_client):
+    criar = lambda nome, cnes: auth_client.post("/api/unidades/", json={  # noqa: E731
+        "nome": nome, "modalidade": "CAPS_II", "cnes": cnes}).json()
+    return criar("CAPS Norte", "7777771"), criar("CAPS Sul", "7777772")
+
+
+def _criar_usuario(auth_client, db_session, username, role, unidade_id=None):
+    """Cria o usuário pela API e dispensa a troca de senha do primeiro acesso."""
+    from usuario.usuario_service import UsuarioService
+
+    corpo = {"username": username, "name": username, "role": role, "password": "senha123"}
+    if unidade_id:
+        corpo["unidade_id"] = unidade_id
+    criado = auth_client.post("/api/usuarios/", json=corpo)
+    assert criado.status_code == 200, criado.text
+    usuario = UsuarioService.obter_por_username(db_session, username)
+    usuario.must_change_password = False
+    db_session.commit()
+
+
+def _unidade_ativa_apos_login(username):
+    from fastapi.testclient import TestClient
+    from main import app
+
+    with TestClient(app) as cliente:
+        cliente.post("/login", data={"username": username, "password": "senha123"})
+        return cliente.get("/api/unidades/ativa").json()["unidade_id"]
+
+
+@pytest.mark.parametrize("perfil", ["operador", "coordenador", "gestor", "admin"])
+def test_login_entra_na_unidade_da_lotacao(auth_client, db_session, unidades_para_login, perfil):
+    _, sul = unidades_para_login
+    _criar_usuario(auth_client, db_session, f"lotado_{perfil}", perfil, sul["id"])
+    ativa = _unidade_ativa_apos_login(f"lotado_{perfil}")
+    assert ativa == sul["id"]
+
+
+def test_gestor_sem_lotacao_entra_em_todas_as_unidades(auth_client, db_session, unidades_para_login):
+    _criar_usuario(auth_client, db_session, "gestor_rede", "gestor")
+    ativa = _unidade_ativa_apos_login("gestor_rede")
+    assert ativa is None
+
+
+def test_gestor_lotado_ainda_pode_trocar_de_unidade(auth_client, db_session, unidades_para_login):
+    """A lotação é só o ponto de partida para quem circula por todas."""
+    from fastapi.testclient import TestClient
+    from main import app
+
+    norte, sul = unidades_para_login
+    _criar_usuario(auth_client, db_session, "gestor_sul", "gestor", sul["id"])
+    with TestClient(app) as cliente:
+        cliente.post("/login", data={"username": "gestor_sul", "password": "senha123"})
+        assert cliente.get("/api/unidades/ativa").json()["unidade_id"] == sul["id"]
+        assert cliente.post(f"/api/unidades/ativa/{norte['id']}").status_code == 200
+        assert cliente.get("/api/unidades/ativa").json()["unidade_id"] == norte["id"]
+        assert cliente.post("/api/unidades/ativa/todas").status_code == 200
+        assert cliente.get("/api/unidades/ativa").json()["unidade_id"] is None
+
+
+def test_gestor_lotado_em_unidade_desativada_entra_em_todas(auth_client, db_session, unidades_para_login):
+    _, sul = unidades_para_login
+    _criar_usuario(auth_client, db_session, "gestor_x", "gestor", sul["id"])
+    assert auth_client.delete(f"/api/unidades/{sul['id']}").status_code == 200
+    ativa = _unidade_ativa_apos_login("gestor_x")
+    assert ativa is None
+
+
 # ── Restauração de backup ───────────────────────────────────────────────
 
 def test_restauracao_exige_a_visao_de_todas_as_unidades(db_session):

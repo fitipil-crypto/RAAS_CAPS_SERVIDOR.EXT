@@ -12,6 +12,8 @@ versão, renomeie essa seção para o número e a data, e marque o commit com
 ## [Não lançado]
 
 ### Adicionado
+- Ao fazer login, o usuário entra direto na unidade em que está lotado. Antes,
+  admin e gestor sempre começavam em "Todas as unidades", mesmo com lotação.
 - Migrações versionadas do banco com **Alembic** (`migrations/`). As migrações
   pendentes são aplicadas na inicialização. No PostgreSQL, uma trava impede
   que os workers do gunicorn migrem ao mesmo tempo.
