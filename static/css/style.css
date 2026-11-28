@@ -252,20 +252,9 @@ body {
 .badge-gray { background: #f1f5f9; color: #64748b; }
 .badge-yellow { background: #fef3c7; color: #92400e; }
 .badge-red { background: #fee2e2; color: #dc2626; }
-/* "Evento nº N" em vermelho pulsante, para saltar no meio da lista.
-   A pulsação é lenta e some com prefers-reduced-motion — pisca-pisca rápido
-   atrapalha a leitura e incomoda quem tem sensibilidade a flashes. */
-.badge-evento {
-    background: #fee2e2; color: #dc2626;
-    animation: evento-cintila 1.4s ease-in-out infinite;
-}
-@keyframes evento-cintila {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .4; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .badge-evento { animation: none; }
-}
+/* "Evento nº N": mesmo fundo verde do "Grupo nº N" (.badge-green), com texto
+   vermelho para diferenciar os dois. */
+.badge-evento { background: #d1fae5; color: #b91c1c; }
 
 /* Tables */
 .table-wrapper { overflow-x: auto; }

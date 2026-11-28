@@ -79,9 +79,13 @@
         const q = norm(texto);
         if (!q) return [];
         if (kind === 'pac') {
-            // Pacientes já escolhidos em outras linhas não aparecem de novo.
+            // Paciente já escolhido em outra linha COM A MESMA DATA não aparece de
+            // novo. Em outra data ele aparece: é comum lançar o mesmo paciente
+            // em dias diferentes (avulso).
+            const minhaData = dataDaLinha(input.closest('tr'));
             const usados = new Set(Array.from(tbody.querySelectorAll('.l-pac'))
-                .filter((el) => el !== input && el.dataset.id).map((el) => el.dataset.id));
+                .filter((el) => el !== input && el.dataset.id && dataDaLinha(el.closest('tr')) === minhaData)
+                .map((el) => el.dataset.id));
             const livres = PACIENTES_DATA.filter((p) => !usados.has(p.id));
             const exato = livres.filter((p) => norm(p.prontuario) === q || norm(p.cns) === q);
             const lista = exato.length ? exato : livres
@@ -333,6 +337,13 @@
         const dt = new Date(y, m - 1, d);
         if (!d || dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
         return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+
+    // Data da linha em AAAA-MM-DD (num grupo, a do grupo); null se vazia/inválida.
+    function dataDaLinha(tr) {
+        if (grupoAtivo) return grupoAtivo.group_date;
+        const el = tr?.querySelector('.l-date');
+        return el ? parseData(el.value, selectedMonth()) : null;
     }
 
     function formatarData(input) {
@@ -965,6 +976,7 @@
         }
         if (grupoExcedido()) { perguntarExcesso({ sim: () => salvar() }); return null; }
 
+        const vistos = new Set(); // paciente|data já preenchido em linha anterior
         Array.from(tbody.rows).forEach((tr) => {
             if (linhaVazia(tr)) return;
             const dateEl = tr.querySelector('.l-date');
@@ -977,10 +989,16 @@
             if (!iso) { marcar(dateEl, 'Data inválida'); problemas.push('data inválida'); }
             else if (iso.slice(0, 7) !== month) { marcar(dateEl, 'Fora da competência'); problemas.push('data fora da competência'); }
             if (!pacEl.dataset.id) { marcar(pacEl, 'Escolha o paciente na lista'); problemas.push('paciente não escolhido'); }
+            else if (iso && vistos.has(`${pacEl.dataset.id}|${iso}`)) {
+                // A busca já esconde o repetido; isto pega a data mudada depois.
+                marcar(pacEl, 'Repetido');
+                problemas.push('paciente já está em outra linha com a mesma data');
+            }
             else if (iso && duplicadosSalvos(pacEl.dataset.id, iso).length) {
                 marcar(pacEl, 'Já lançado');
                 problemas.push('já lançado com a mesma data, profissional, procedimento e grupo');
             }
+            if (iso && pacEl.dataset.id) vistos.add(`${pacEl.dataset.id}|${iso}`);
             const qty = parseInt(qtyEl.value, 10);
             if (!(qty >= 1)) { marcar(qtyEl, 'Quantidade mínima 1'); problemas.push('quantidade inválida'); }
 

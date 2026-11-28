@@ -12,6 +12,10 @@ versão, renomeie essa seção para o número e a data, e marque o commit com
 ## [Não lançado]
 
 ### Adicionado
+- Restauração de backup por unidade: com um CAPS selecionado, a restauração
+  substitui só os dados dele. As outras unidades, o catálogo de procedimentos
+  e as configurações gerais não mudam. Antes, ela exigia "Todas as unidades" e
+  apagava os dados de todos os CAPS.
 - Ao fazer login, o usuário entra direto na unidade em que está lotado. Antes,
   admin e gestor sempre começavam em "Todas as unidades", mesmo com lotação.
 - Migrações versionadas do banco com **Alembic** (`migrations/`). As migrações

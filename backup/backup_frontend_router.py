@@ -34,8 +34,14 @@ def page_backup(request: Request, db: Session = Depends(get_db)):
         "procedimentos": len(ProcedimentoService.listar_todos(db)),
         "registros": len(RegistroService.listar_todos(db)),
     }
+    # A restauração age só na unidade selecionada (ou em todas, na visão geral):
+    # a tela diz qual antes de o usuário confirmar.
+    from unidade.unidade_service import UnidadeService
+    unidade = UnidadeService.obter_por_id(db, getattr(request.state, "unidade_id", None))
+
     return templates.TemplateResponse(request, "backup.html", {
         "user": user,
         "stats": stats,
+        "unidade_restauro": unidade.nome if unidade else None,
         "active_page": "backup",
     })

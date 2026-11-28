@@ -40,7 +40,15 @@
         <h2>Restaurar Backup</h2>
         <p style="color:var(--muted);">Carregue um arquivo <code>.json</code> para restaurar os dados.</p>
         <div style="background:var(--warning-light);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;">
-            ⚠️ Atenção: a restauração substitui todos os dados atuais.
+            {% if unidade_restauro %}
+            ⚠️ Atenção: a restauração substitui os pacientes, profissionais e registros
+            da unidade <strong>{{ unidade_restauro }}</strong>. As outras unidades, o catálogo
+            de procedimentos e as configurações gerais não são alterados.
+            {% else %}
+            ⚠️ Atenção: com "Todas as unidades" selecionado, a restauração substitui
+            <strong>os dados de todas as unidades</strong>. Para restaurar um CAPS só,
+            selecione a unidade na barra superior.
+            {% endif %}
         </div>
         <input type="file" id="restoreInput" accept=".json" style="display:none;" onchange="handleRestore(event)">
         <button class="btn btn-outline btn-lg" id="btnRestore" onclick="document.getElementById('restoreInput').click()">📁 Selecionar Arquivo de Backup</button>
@@ -222,7 +230,11 @@ function handleRestore(e) {
     const file = input.files[0];
     if (!file) return;
     input.value = '';  // permite reenviar o mesmo arquivo
-    if (!confirm('A restauração substituirá TODOS os dados atuais. Continuar?')) return;
+    const unidadeRestauro = {{ unidade_restauro | tojson }};
+    const aviso = unidadeRestauro
+        ? `A restauração substituirá os dados da unidade ${unidadeRestauro}. Continuar?`
+        : 'A restauração substituirá os dados de TODAS as unidades. Continuar?';
+    if (!confirm(aviso)) return;
 
     const btn = document.getElementById('btnRestore');
     btn.disabled = true;

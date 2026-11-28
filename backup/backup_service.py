@@ -1,6 +1,7 @@
 """
 Serviço para backup e restauração.
 """
+import re
 import uuid as uuid_lib
 
 from pydantic import ValidationError
@@ -98,6 +99,27 @@ class BackupService:
         return validados
 
     @staticmethod
+    def _associar_procedimentos(db: Session, itens) -> tuple[dict, int]:
+        """Liga cada procedimento do backup ao do catálogo com o mesmo código
+        SIGTAP (comparando só os dígitos) e cria os que ainda não existem.
+        Devolve o mapa id_antigo -> id_atual e quantos foram criados."""
+        def chave(codigo):
+            return re.sub(r"\D", "", codigo or "")
+
+        catalogo = {chave(p.code): p.id for p in db.query(Procedimento).all()}
+        mapa, novos = {}, 0
+        for old_id, dados in itens:
+            atual = catalogo.get(chave(dados.code))
+            if atual is None:
+                obj = Procedimento(id=str(uuid_lib.uuid4()), **dados.model_dump())
+                db.add(obj)
+                atual = catalogo[chave(dados.code)] = obj.id
+                novos += 1
+            if old_id:
+                mapa[old_id] = atual
+        return mapa, novos
+
+    @staticmethod
     def restaurar_backup(db: Session, data: dict) -> dict:
         """Restaura dados a partir de um backup, de forma atômica.
 
@@ -124,16 +146,23 @@ class BackupService:
         if erros:
             raise BackupInvalidoError(erros)
 
-        # A restauração limpa e repovoa o banco todo, inclusive o catálogo de
-        # procedimentos, que é compartilhado por todas as unidades. Com uma
-        # unidade selecionada o escopo limitaria a limpeza a ela, e o resultado
-        # seria um banco meio restaurado — então a operação exige a visão geral.
+        # Dois modos, conforme a unidade selecionada na barra superior:
+        #
+        # * uma unidade (o caso de quem trabalha num CAPS): só os pacientes,
+        #   profissionais e registros DESSA unidade são apagados e recriados — o
+        #   escopo filtra os DELETE e preenche unidade_id nos INSERT. O catálogo
+        #   de procedimentos e as configurações gerais são compartilhados por
+        #   todas as unidades, então não são apagados: os procedimentos do
+        #   backup são associados aos existentes pelo código SIGTAP.
+        # * "Todas as unidades": o banco inteiro é substituído, como antes.
         from sistema.escopo import unidade_ativa
 
-        if unidade_ativa():
+        unidade = unidade_ativa()
+        origem = data.get("unidade_id")
+        if unidade and origem and origem != unidade:
             raise BackupInvalidoError([
-                "a restauração afeta todas as unidades; selecione 'Todas as unidades' "
-                "na barra superior antes de restaurar"
+                "este backup foi gerado em outra unidade; selecione essa unidade na "
+                "barra superior para restaurá-lo"
             ])
 
         log = []
@@ -142,12 +171,17 @@ class BackupService:
             db.query(Registro).delete()
             db.query(Paciente).delete()
             db.query(Profissional).delete()
-            db.query(Procedimento).delete()
-            log.append("Dados existentes limpos")
+            if unidade:
+                log.append("Dados da unidade selecionada limpos (as outras unidades não foram alteradas)")
+            else:
+                db.query(Procedimento).delete()
+                log.append("Dados existentes limpos")
 
-            if config:
+            if config and not unidade:
                 ConfigService.atualizar_varios(db, config, commit=False)
                 log.append("Configurações restauradas")
+            elif config:
+                log.append("Configurações gerais mantidas (valem para todas as unidades)")
 
             def inserir(modelo, itens):
                 mapa = {}
@@ -162,8 +196,12 @@ class BackupService:
             log.append(f"{len(id_map_pat)} pacientes restaurados")
             id_map_prof = inserir(Profissional, profissionais)
             log.append(f"{len(id_map_prof)} profissionais restaurados")
-            id_map_proc = inserir(Procedimento, procedimentos)
-            log.append(f"{len(id_map_proc)} procedimentos restaurados")
+            if unidade:
+                id_map_proc, novos = BackupService._associar_procedimentos(db, procedimentos)
+                log.append(f"{len(id_map_proc)} procedimentos associados ao catálogo ({novos} novos)")
+            else:
+                id_map_proc = inserir(Procedimento, procedimentos)
+                log.append(f"{len(id_map_proc)} procedimentos restaurados")
 
             for _, r in registros:
                 r.patient_id = id_map_pat.get(r.patient_id, r.patient_id)

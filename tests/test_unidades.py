@@ -515,18 +515,110 @@ def test_gestor_lotado_em_unidade_desativada_entra_em_todas(auth_client, db_sess
 
 # ── Restauração de backup ───────────────────────────────────────────────
 
-def test_restauracao_exige_a_visao_de_todas_as_unidades(db_session):
-    """Restaurar com um CAPS selecionado deixaria o banco meio restaurado."""
+@pytest.fixture
+def caps_i_e_caps_ad(db_session):
+    """Dois CAPS com um paciente e um registro cada, e um procedimento no catálogo."""
+    from procedimento.procedimento_model import Procedimento
+
+    caps_i = Unidade(nome="CAPS I Restauro", modalidade="CAPS_I", cnes="1010101")
+    caps_ad = Unidade(nome="CAPS AD Restauro", modalidade="CAPS_AD", cnes="1010103")
+    proc = Procedimento(code="03.01.08.002-0", name="ACOLHIMENTO")
+    db_session.add_all([caps_i, caps_ad, proc])
+    db_session.commit()
+    for unidade, nome in ((caps_i, "ANTIGO DO CAPS I"), (caps_ad, "PACIENTE DO CAPS AD")):
+        with como_unidade(unidade.id):
+            pac = Paciente(name=nome)
+            db_session.add(pac)
+            db_session.commit()
+            db_session.add(Registro(service_month="2026-01", service_date="2026-01-10",
+                                    patient_id=pac.id, procedure_id=proc.id))
+            db_session.commit()
+    return caps_i, caps_ad, proc
+
+
+def _backup_de_um_caps(**extra):
+    """Backup como o da versão local de um CAPS só (sem unidade_id)."""
+    return {
+        "config": {"organ_name": "NAO DEVE MUDAR"},
+        "patients": [{"id": "p-antigo", "name": "RESTAURADO"}],
+        "professionals": [{"id": "f-antigo", "name": "PROFISSIONAL RESTAURADO"}],
+        "procedures": [
+            {"id": "x-acolhimento", "code": "0301080020", "name": "ACOLHIMENTO"},
+            {"id": "x-novo", "code": "0301080399", "name": "PROCEDIMENTO NOVO"},
+        ],
+        "records": [
+            {"service_month": "2026-02", "service_date": "2026-02-05", "patient_id": "p-antigo",
+             "professional_id": "f-antigo", "procedure_id": "x-acolhimento"},
+            {"service_month": "2026-02", "service_date": "2026-02-06", "patient_id": "p-antigo",
+             "professional_id": "f-antigo", "procedure_id": "x-novo"},
+        ],
+        **extra,
+    }
+
+
+def test_restauracao_na_unidade_substitui_so_os_dados_dela(db_session, caps_i_e_caps_ad, monkeypatch):
+    """Quem trabalha num CAPS restaura o backup dele sem apagar os outros."""
+    from backup.backup_service import BackupService
+    from config.config_service import ConfigService
+    from procedimento.procedimento_model import Procedimento
+
+    caps_i, caps_ad, proc = caps_i_e_caps_ad
+
+    def _proibido(*a, **k):
+        raise AssertionError("configurações gerais não podem mudar na restauração por unidade")
+
+    monkeypatch.setattr(ConfigService, "atualizar_varios", _proibido)
+
+    with como_unidade(caps_i.id):
+        resultado = BackupService.restaurar_backup(db_session, _backup_de_um_caps())
+    assert resultado["success"] is True
+
+    with sem_escopo():
+        pacientes = {p.name: p.unidade_id for p in db_session.query(Paciente).all()}
+        registros = db_session.query(Registro).all()
+        catalogo = {p.code: p.id for p in db_session.query(Procedimento).all()}
+
+    # O CAPS AD ficou intacto; o paciente antigo do CAPS I foi substituído.
+    assert pacientes == {"PACIENTE DO CAPS AD": caps_ad.id, "RESTAURADO": caps_i.id}
+    assert sorted(r.unidade_id for r in registros) == sorted([caps_ad.id, caps_i.id, caps_i.id])
+
+    # Catálogo: o procedimento existente foi reaproveitado pelo código (com ou
+    # sem pontuação) e só o que faltava foi criado.
+    assert set(catalogo) == {"03.01.08.002-0", "0301080399"}
+    do_caps_i = {r.procedure_id for r in registros if r.unidade_id == caps_i.id}
+    assert do_caps_i == {proc.id, catalogo["0301080399"]}
+
+
+def test_restauracao_recusa_backup_de_outra_unidade(db_session, caps_i_e_caps_ad):
     from backup.backup_service import BackupInvalidoError, BackupService
 
-    unidade = Unidade(nome="CAPS Restauro", modalidade="CAPS_I", cnes="1010101")
-    db_session.add(unidade)
-    db_session.commit()
+    caps_i, caps_ad, _ = caps_i_e_caps_ad
+    with como_unidade(caps_i.id):
+        with pytest.raises(BackupInvalidoError, match="outra unidade"):
+            BackupService.restaurar_backup(db_session, _backup_de_um_caps(unidade_id=caps_ad.id))
+    with sem_escopo():
+        assert db_session.query(Paciente).count() == 2  # nada foi apagado
 
-    with como_unidade(unidade.id):
-        with pytest.raises(BackupInvalidoError) as erro:
-            BackupService.restaurar_backup(db_session, {"patients": []})
-    assert "Todas as unidades" in str(erro.value)
+
+def test_restauracao_aceita_backup_da_propria_unidade(db_session, caps_i_e_caps_ad):
+    from backup.backup_service import BackupService
+
+    caps_i, _, _ = caps_i_e_caps_ad
+    with como_unidade(caps_i.id):
+        backup = BackupService.criar_backup(db_session)
+        assert backup["unidade_id"] == caps_i.id
+        BackupService.restaurar_backup(db_session, backup)
+        assert [p.name for p in db_session.query(Paciente).all()] == ["ANTIGO DO CAPS I"]
+
+
+def test_restauracao_em_todas_as_unidades_substitui_o_banco(db_session, caps_i_e_caps_ad):
+    from backup.backup_service import BackupService
+    from procedimento.procedimento_model import Procedimento
+
+    BackupService.restaurar_backup(db_session, _backup_de_um_caps(config=None))
+    with sem_escopo():
+        assert [p.name for p in db_session.query(Paciente).all()] == ["RESTAURADO"]
+        assert db_session.query(Procedimento).count() == 2
 
 
 def test_backup_registra_de_que_unidade_e(db_session):

@@ -90,6 +90,7 @@ classifica cada achado como **bloqueio** (impede a exportação) ou **alerta**
 |---|---|
 | RN18 | Toda unidade tem uma das 7 modalidades: CAPS I, II, III, i, AD, AD III e AD IV. |
 | RN19 | Faixa etária, leitos e porte populacional fora do esperado para a modalidade geram **aviso**, não bloqueio (ver README_SERVIDOR.md, seção 7). |
+| RN19b | A restauração de backup age na unidade selecionada: substitui só os pacientes, profissionais e registros dela, associa os procedimentos ao catálogo pelo código SIGTAP, mantém as configurações gerais e recusa backup gerado em outra unidade. Com "Todas as unidades", substitui o banco inteiro. (`BackupService.restaurar_backup`) |
 | RN19a | Ao fazer login, o usuário entra na unidade da sua lotação. `coordenador`/`operador` ficam presos a ela; `admin`/`gestor` podem trocar depois. Sem lotação, ou com a unidade da lotação desativada, `admin`/`gestor` começam em "Todas as unidades". (`UnidadeService.unidade_ao_entrar`) |
 
 Testes: `tests/test_unidades.py`.

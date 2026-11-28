@@ -118,3 +118,16 @@ def test_restaurar_backup_antigo_com_dados_fora_do_padrao_atual(auth_client):
     assert resp.status_code == 200, resp.text
     pacientes = auth_client.get("/api/pacientes/").json()
     assert any(p["name"] == "PACIENTE LEGADO" and p["cep"] == "1906372" for p in pacientes)
+
+
+def test_pagina_backup_avisa_a_unidade(auth_client):
+    criada = auth_client.post("/api/unidades/", json={
+        "nome": "CAPS Pagina", "modalidade": "CAPS_I", "cnes": "5050505"}).json()
+    html_todas = auth_client.get("/backup").text
+    assert "os dados de todas as unidades" in html_todas
+    assert "const unidadeRestauro = null;" in html_todas
+
+    assert auth_client.post(f"/api/unidades/ativa/{criada['id']}").status_code == 200
+    html = auth_client.get("/backup").text
+    assert "da unidade <strong>CAPS Pagina</strong>" in html
+    assert 'const unidadeRestauro = "CAPS Pagina";' in html

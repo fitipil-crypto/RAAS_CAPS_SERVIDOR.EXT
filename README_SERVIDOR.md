@@ -140,7 +140,7 @@ lotação é preenchida sozinha.
 
 Admin e gestor trocam de unidade pelo seletor na barra superior, que tem também
 a visão **"Todas as unidades"** (soma de todos os CAPS, usada para comparar a
-rede, restaurar backup e conferir dados sem unidade).
+rede e conferir dados sem unidade).
 
 **Ao entrar no sistema**, todo usuário cai direto na unidade em que está
 lotado, qualquer que seja o perfil. Para admin e gestor isso é só o ponto de
@@ -353,7 +353,8 @@ Ela cobre, além de tudo o que já havia:
 - que trocar o id na URL não abre a ficha de paciente de outro CAPS;
 - que um operador não alcança outra unidade nem forçando a sessão;
 - que cada unidade exporta com o seu CNES;
-- que a restauração de backup exige a visão "Todas as unidades";
+- que a restauração de backup numa unidade não toca nas outras nem no
+  catálogo de procedimentos, e recusa backup de outra unidade;
 - os avisos de faixa etária, leitos e porte das 7 modalidades.
 
 ---
@@ -365,9 +366,14 @@ Para não haver surpresa depois:
 - **Backup automático em pasta de rede do Windows** (tela Backup › Backup
   automático) é da versão local e fica **desligado** no servidor — o backup
   aqui é o `pg_dump` por cron. Para religá-lo, `BACKUP_AUTO_LOCAL=true`.
-- A tela **Backup › Baixar/Restaurar** (JSON) continua funcionando: o download
-  respeita a unidade selecionada, e a restauração exige a visão "Todas as
-  unidades" porque mexe no banco inteiro.
+- A tela **Backup › Baixar/Restaurar** (JSON) respeita a unidade selecionada.
+  Com um CAPS selecionado, o download traz só os dados dele, e a restauração
+  substitui só os pacientes, profissionais e registros dele. O catálogo de
+  procedimentos e as configurações gerais não mudam, e um backup gerado em
+  outra unidade é recusado. Com "Todas as unidades", a restauração substitui o
+  banco inteiro. Os dados restaurados assim ficam **sem unidade**, e é preciso
+  rodar `python -m unidade.migracao` para atribuí-los. Para restaurar um CAPS,
+  prefira selecioná-lo antes.
 - **`sistema/manutencao.py`** (VACUUM e snapshot do arquivo) só funciona com
   SQLite; no PostgreSQL ela avisa e não faz nada. O lugar dessas tarefas no
   servidor é o `autovacuum` do PostgreSQL e o `backup_postgres.sh`.
